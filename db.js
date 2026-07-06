@@ -1,5 +1,5 @@
 const DB_NAME = 'pos_database';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const DB = {
   db: null,
@@ -21,6 +21,18 @@ const DB = {
 
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
+
+        // Reset database if upgrading from v1 to v2 to seed new electronics products
+        if (e.oldVersion < 2) {
+          try {
+            if (db.objectStoreNames.contains('products')) db.deleteObjectStore('products');
+            if (db.objectStoreNames.contains('categories')) db.deleteObjectStore('categories');
+            if (db.objectStoreNames.contains('transactions')) db.deleteObjectStore('transactions');
+            if (db.objectStoreNames.contains('settings')) db.deleteObjectStore('settings');
+          } catch (err) {
+            console.error('Error clearing old object stores:', err);
+          }
+        }
 
         // Products store
         if (!db.objectStoreNames.contains('products')) {
@@ -159,27 +171,28 @@ const DB = {
     const categories = await this.getCategories();
     const storeInfo = await this.getSettings('store_info');
 
-    // Default settings
+    // Default settings - Universal Electronic Shop
     if (!storeInfo) {
       await this.saveSettings('store_info', {
-        name: 'Kopi Ruang Temu',
-        address: 'Jl. Senopati No. 45, Jakarta Selatan',
-        phone: '0812-3456-7890',
-        taxRate: 10, // 10% PB1
-        serviceCharge: 5, // 5% Service Charge
+        name: 'Ruang Temu Gadget & Electronic',
+        address: 'MTC Mall Lantai 2, Jakarta Pusat',
+        phone: '0812-9876-5432',
+        taxRate: 11, // 11% PPN Indonesia
+        serviceCharge: 0, // No service charge for retail
         currency: 'IDR',
-        receiptFooter: 'Terima kasih atas kunjungan Anda!'
+        receiptFooter: 'Terima kasih telah berbelanja di toko kami!'
       });
     }
 
-    // Default categories
+    // Default categories for electronics
     let catList = categories;
     if (categories.length === 0) {
       const defaultCats = [
-        { name: 'Coffee' },
-        { name: 'Non-Coffee' },
-        { name: 'Pastry' },
-        { name: 'Main Course' }
+        { name: 'Smartphone & Tablet' },
+        { name: 'Audio & Headphone' },
+        { name: 'Aksesoris & Charger' },
+        { name: 'Laptop & Komputer' },
+        { name: 'Wearable & Smartwatch' }
       ];
       for (const cat of defaultCats) {
         await this.saveCategory(cat);
@@ -187,98 +200,98 @@ const DB = {
       catList = await this.getCategories();
     }
 
-    // Default products with mock QR/Barcodes
+    // Default products with mock QR/Barcodes (Electronics)
     if (products.length === 0) {
       const initialProducts = [
         {
-          name: 'Espresso Single',
-          price: 18000,
-          cost: 5000,
-          stock: 99,
-          category: 'Coffee',
-          code: '1001',
-          color: 'amber',
-          icon: 'fa-mug-hot'
-        },
-        {
-          name: 'Iced Cafe Latte',
-          price: 28000,
-          cost: 8000,
-          stock: 50,
-          category: 'Coffee',
-          code: '1002',
-          color: 'orange',
-          icon: 'fa-glass-water'
-        },
-        {
-          name: 'Caramel Macchiato',
-          price: 35000,
-          cost: 11000,
-          stock: 40,
-          category: 'Coffee',
-          code: '1003',
-          color: 'yellow',
-          icon: 'fa-mug-saucer'
-        },
-        {
-          name: 'Matcha Latte Iced',
-          price: 30000,
-          cost: 9000,
-          stock: 35,
-          category: 'Non-Coffee',
-          code: '2001',
-          color: 'green',
-          icon: 'fa-leaf'
-        },
-        {
-          name: 'Signature Chocolate',
-          price: 28000,
-          cost: 8500,
-          stock: 45,
-          category: 'Non-Coffee',
-          code: '2002',
-          color: 'red',
-          icon: 'fa-bowl-food'
-        },
-        {
-          name: 'Butter Croissant',
-          price: 22000,
-          cost: 7000,
-          stock: 20,
-          category: 'Pastry',
-          code: '3001',
-          color: 'rose',
-          icon: 'fa-bread-slice'
-        },
-        {
-          name: 'Chocolate Danish',
-          price: 25000,
-          cost: 8000,
+          name: 'iPhone 15 Pro Max 256GB',
+          price: 22499000,
+          cost: 18000000,
           stock: 15,
-          category: 'Pastry',
-          code: '3002',
-          color: 'pink',
-          icon: 'fa-cookie'
-        },
-        {
-          name: 'Nasi Goreng Kampung',
-          price: 38000,
-          cost: 14000,
-          stock: 30,
-          category: 'Main Course',
-          code: '4001',
-          color: 'emerald',
-          icon: 'fa-plate-wheat'
-        },
-        {
-          name: 'Spaghetti Carbonara',
-          price: 45000,
-          cost: 17000,
-          stock: 25,
-          category: 'Main Course',
-          code: '4002',
+          category: 'Smartphone & Tablet',
+          code: 'EL001',
           color: 'indigo',
-          icon: 'fa-utensils'
+          icon: 'fa-mobile-screen-button'
+        },
+        {
+          name: 'Samsung Galaxy S24 Ultra',
+          price: 20999000,
+          cost: 16500000,
+          stock: 10,
+          category: 'Smartphone & Tablet',
+          code: 'EL002',
+          color: 'amber',
+          icon: 'fa-mobile-screen-button'
+        },
+        {
+          name: 'Sony WH-1000XM5 ANC Headphone',
+          price: 4899000,
+          cost: 3800000,
+          stock: 20,
+          category: 'Audio & Headphone',
+          code: 'EL003',
+          color: 'rose',
+          icon: 'fa-headphones'
+        },
+        {
+          name: 'JBL Charge 5 Bluetooth Speaker',
+          price: 2599000,
+          cost: 1950000,
+          stock: 25,
+          category: 'Audio & Headphone',
+          code: 'EL004',
+          color: 'orange',
+          icon: 'fa-volume-high'
+        },
+        {
+          name: 'Anker PowerCore 30W Powerbank',
+          price: 450000,
+          cost: 290000,
+          stock: 50,
+          category: 'Aksesoris & Charger',
+          code: 'EL005',
+          color: 'green',
+          icon: 'fa-plug'
+        },
+        {
+          name: 'MacBook Air M3 8/256GB',
+          price: 16999000,
+          cost: 14200000,
+          stock: 8,
+          category: 'Laptop & Komputer',
+          code: 'EL006',
+          color: 'emerald',
+          icon: 'fa-laptop'
+        },
+        {
+          name: 'Logitech MX Master 3S Mouse',
+          price: 1450000,
+          cost: 1050000,
+          stock: 30,
+          category: 'Laptop & Komputer',
+          code: 'EL007',
+          color: 'yellow',
+          icon: 'fa-computer-mouse'
+        },
+        {
+          name: 'Apple Watch Series 9 GPS 45mm',
+          price: 6499000,
+          cost: 5100000,
+          stock: 12,
+          category: 'Wearable & Smartwatch',
+          code: 'EL008',
+          color: 'pink',
+          icon: 'fa-stopwatch'
+        },
+        {
+          name: 'Baseus USB-C to USB-C 100W Cable',
+          price: 85000,
+          cost: 40000,
+          stock: 100,
+          category: 'Aksesoris & Charger',
+          code: 'EL009',
+          color: 'red',
+          icon: 'fa-plug'
         }
       ];
 

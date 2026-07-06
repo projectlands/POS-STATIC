@@ -893,6 +893,7 @@ ${footer}
 
 function closeReceiptModal() {
   document.getElementById('modal-receipt').classList.add('hidden');
+  switchView('cashier');
 }
 
 // ----------------------------------------------------
