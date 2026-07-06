@@ -199,9 +199,9 @@ function switchView(viewName) {
     if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Laporan Penjualan";
     
-    // Set default dates for report
-    const todayStr = new Date().toISOString().split('T')[0];
-    const sevenDaysAgoStr = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Set default dates for report (using local date string)
+    const todayStr = getLocalDateString(0);
+    const sevenDaysAgoStr = getLocalDateString(-6);
     document.getElementById('filter-date-start').value = sevenDaysAgoStr;
     document.getElementById('filter-date-end').value = todayStr;
     
@@ -566,17 +566,25 @@ async function handleScannedCode(code) {
   }
 }
 
-// Simple dynamic Toast notification
+// Simple dynamic Toast notification using robust transitions
 function showToast(message) {
   const toast = document.createElement('div');
-  toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 border border-primary-500/50 shadow-glow-primary text-white font-semibold text-xs py-3 px-6 rounded-xl z-50 animate-[fadeIn_0.15s_ease-out] flex items-center gap-2';
+  toast.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-900 border border-primary-500/50 shadow-glow-primary text-white font-semibold text-xs py-3 px-6 rounded-xl z-50 flex items-center gap-2 transition-all duration-300 opacity-0 transform translate-y-2';
   toast.innerHTML = `<i class="fa-solid fa-circle-check text-success-500"></i> ${message}`;
   
   document.body.appendChild(toast);
   
+  // Trigger transition in next tick
   setTimeout(() => {
-    toast.classList.add('animate-[fadeOut_0.2s_ease-in]');
-    toast.addEventListener('animationend', () => toast.remove());
+    toast.classList.remove('opacity-0', 'translate-y-2');
+  }, 10);
+  
+  // Trigger exit and removal
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'translate-y-2');
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
   }, 2500);
 }
 
@@ -843,12 +851,13 @@ async function submitTransaction() {
 }
 
 function renderReceipt(tx) {
-  const container = document.getElementById('print-area');
+  const preview = document.getElementById('receipt-preview');
+  const printArea = document.getElementById('print-area');
   const modal = document.getElementById('modal-receipt');
   
   const shopName = State.storeInfo ? State.storeInfo.name : 'Ruang Temu';
   const shopAddr = State.storeInfo ? State.storeInfo.address : 'Jakarta, Indonesia';
-  const shopPhone = State.storeInfo ? State.storeInfo.phone : '0812-3456-7890';
+  const shopPhone = State.storeInfo ? State.storeInfo.phone : '0812-9876-5432';
   const footer = State.storeInfo ? State.storeInfo.receiptFooter : 'Terima kasih atas kunjungan Anda!';
   
   const dateStr = new Date(tx.timestamp).toLocaleString('id-ID');
@@ -863,11 +872,17 @@ ${item.name.padEnd(20)}
 `;
   });
 
+  // Split and dynamically center-align text lines for thermal roll layout (40 cols)
+  const nameLine = centerText(shopName.toUpperCase());
+  const addrLines = shopAddr.split(/\r?\n/).map(line => centerText(line)).join('\n');
+  const phoneLine = centerText(`Telp: ${shopPhone}`);
+  const footerLines = footer.split(/\r?\n/).map(line => centerText(line)).join('\n');
+
   const rawReceipt = `
 ========================================
-           ${shopName.toUpperCase()}
-     ${shopAddr}
-         Telp: ${shopPhone}
+${nameLine}
+${addrLines}
+${phoneLine}
 ========================================
 No Nota  : ${tx.id}
 Tanggal  : ${dateStr}
@@ -877,18 +892,22 @@ ${itemsHtml.trim()}
 ========================================
 Subtotal       : Rp ${tx.subtotal.toLocaleString('id-ID').padStart(15)}
 Diskon         : Rp ${tx.discount.toLocaleString('id-ID').padStart(15)}
-Pajak & Layanan: Rp ${tx.taxSvc.toLocaleString('id-ID').padStart(15)}
+Pajak PPN      : Rp ${tx.taxSvc.toLocaleString('id-ID').padStart(15)}
 ----------------------------------------
 TOTAL          : Rp ${tx.total.toLocaleString('id-ID').padStart(15)}
 ========================================
 Bayar (${tx.paymentMethod.padEnd(4)})  : Rp ${tx.amountPaid.toLocaleString('id-ID').padStart(15)}
 Kembalian      : Rp ${tx.change.toLocaleString('id-ID').padStart(15)}
 ========================================
-${footer}
+${footerLines}
 ========================================
 `;
 
-  container.innerHTML = `<pre class="whitespace-pre-wrap leading-tight text-[11px] font-mono text-black">${rawReceipt}</pre>`;
+  const receiptHtml = `<pre class="whitespace-pre-wrap leading-tight text-[11px] font-mono text-black">${rawReceipt}</pre>`;
+  
+  if (preview) preview.innerHTML = receiptHtml;
+  if (printArea) printArea.innerHTML = receiptHtml;
+  
   modal.classList.remove('hidden');
 }
 
@@ -1338,22 +1357,35 @@ function renderSalesTrendChart(txList, dateStartStr, dateEndStr) {
   ctx.clearRect(0, 0, width, height);
 
   // Generate date list between start and end (Max 7 days for clear labels)
-  const start = new Date(dateStartStr);
-  const end = new Date(dateEndStr);
-  const daysDiff = Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  const startParts = dateStartStr.split('-');
+  const startYear = parseInt(startParts[0]);
+  const startMonth = parseInt(startParts[1]) - 1;
+  const startDay = parseInt(startParts[2]);
+
+  const endParts = dateEndStr.split('-');
+  const endYear = parseInt(endParts[0]);
+  const endMonth = parseInt(endParts[1]) - 1;
+  const endDay = parseInt(endParts[2]);
+
+  const startLocal = new Date(startYear, startMonth, startDay);
+  const endLocal = new Date(endYear, endMonth, endDay);
+  const daysDiff = Math.round((endLocal - startLocal) / (24 * 60 * 60 * 1000)) + 1;
 
   const datesList = [];
   for (let i = 0; i < Math.min(daysDiff, 10); i++) {
-    const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
-    datesList.push(d.toISOString().split('T')[0]);
+    const d = new Date(startYear, startMonth, startDay + i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dayVal = String(d.getDate()).padStart(2, '0');
+    datesList.push(`${y}-${m}-${dayVal}`);
   }
 
-  // Aggregate revenues by date
+  // Aggregate revenues by date (local time)
   const salesByDate = {};
   datesList.forEach(d => salesByDate[d] = 0);
 
   txList.forEach(tx => {
-    const txDateStr = new Date(tx.timestamp).toISOString().split('T')[0];
+    const txDateStr = formatLocalDate(tx.timestamp);
     if (salesByDate[txDateStr] !== undefined) {
       salesByDate[txDateStr] += tx.total;
     }

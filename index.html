@@ -85,56 +85,33 @@
     }
 
     /* Print Struk styling */
-    @media print {
-      body > :not(#modal-receipt) {
+    @media screen {
+      #print-area {
         display: none !important;
       }
-      #modal-receipt {
+    }
+    @media print {
+      body > :not(#print-area) {
+        display: none !important;
+      }
+      #print-area {
+        display: block !important;
         position: absolute !important;
         left: 0 !important;
         top: 0 !important;
-        width: 100% !important;
-        height: auto !important;
-        background: white !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
+        width: 80mm !important;
         margin: 0 !important;
-        display: block !important;
-      }
-      #modal-receipt > div {
-        border: none !important;
-        box-shadow: none !important;
-        background: white !important;
-        max-width: none !important;
-        width: 100% !important;
-        padding: 0 !important;
-        margin: 0 !important;
-      }
-      /* Hide receipt modal header and footer buttons */
-      #modal-receipt > div > :not(:nth-child(2)) {
-        display: none !important;
-      }
-      #modal-receipt > div > div:nth-child(2) {
-        padding: 0 !important;
-        background: white !important;
-      }
-      #print-area {
-        max-height: none !important;
-        overflow: visible !important;
-        height: auto !important;
-        width: 100% !important;
-        max-width: 80mm;
-        padding: 0 !important;
-        margin: 0 auto !important;
+        padding: 4mm !important;
+        box-sizing: border-box !important;
         color: #000 !important;
         background: #fff !important;
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 11px;
-        line-height: 1.2;
+        font-family: 'Courier New', Courier, monospace !important;
+        font-size: 12px !important;
+        line-height: 1.25 !important;
       }
       @page {
-        margin: 0;
+        size: 80mm auto !important;
+        margin: 0 !important;
       }
     }
   </style>
@@ -768,9 +745,9 @@
         </button>
       </div>
 
-      <!-- Receipt Body (Printable Area) -->
+      <!-- Receipt Body (Screen Preview) -->
       <div class="p-6 bg-slate-950 flex justify-center">
-        <div id="print-area" class="w-full bg-white text-black p-4 rounded shadow-sm font-mono text-xs overflow-y-auto max-h-[350px]">
+        <div id="receipt-preview" class="w-full bg-white text-black p-4 rounded shadow-sm font-mono text-xs overflow-y-auto max-h-[350px]">
           <!-- Receipt Template (Rendered Dynamically) -->
         </div>
       </div>
@@ -809,6 +786,9 @@
       <span class="text-[9px] mt-1 font-semibold">Laporan</span>
     </button>
   </div>
+
+  <!-- Root Print Area (Hidden on screen, visible on print) -->
+  <div id="print-area" class="hidden"></div>
 
   <!-- App Core JS and Logic -->
   <script src="./db.js"></script>
