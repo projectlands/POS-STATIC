@@ -1136,9 +1136,8 @@ async function loadReportData() {
 
   if (!dateStartStr || !dateEndStr) return;
 
-  const startTimestamp = new Date(dateStartStr + 'T00:00:00').getTime();
-  // Include whole end day
-  const endTimestamp = new Date(dateEndStr + 'T23:59:59').getTime();
+  const startTimestamp = parseLocalDate(dateStartStr, false);
+  const endTimestamp = parseLocalDate(dateEndStr, true);
 
   const transactions = await DB.getTransactions();
 
@@ -1472,6 +1471,9 @@ function renderSalesTrendChart(txList, dateStartStr, dateEndStr) {
 async function resetDatabaseHandler() {
   if (confirm("Apakah Anda yakin ingin menghapus semua data dan memulihkan data sampel elektronik? Tindakan ini akan menghapus semua produk kustom dan transaksi Anda.")) {
     try {
+      if (DB.db) {
+        DB.db.close();
+      }
       const req = indexedDB.deleteDatabase('pos_database');
       req.onsuccess = () => {
         showToast("Database berhasil di-reset!");
