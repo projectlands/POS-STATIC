@@ -1624,3 +1624,31 @@ async function saveStoreSettingsHandler(event) {
     alert('Gagal menyimpan pengaturan toko.');
   }
 }
+
+
+// Center-align text dynamically for 40-character thermal roll layout
+function centerText(text, width = 40) {
+  if (!text) return '';
+  const trimmed = text.trim();
+  if (trimmed.length >= width) return trimmed.substring(0, width);
+  const leftPad = Math.floor((width - trimmed.length) / 2);
+  return ' '.repeat(leftPad) + trimmed;
+}
+
+// Get local date string formatted as YYYY-MM-DD
+function getLocalDateString(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Format local date string from timestamp as YYYY-MM-DD
+function formatLocalDate(timestamp) {
+  const d = new Date(timestamp);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
