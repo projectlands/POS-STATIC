@@ -1,6 +1,26 @@
 <!DOCTYPE html>
 <html lang="id" class="dark">
 <head>
+  <script>
+    // Force PWA Cache Busting on Version Upgrade (4.0)
+    const APP_VERSION = '4.0';
+    if (localStorage.getItem('app_version') !== APP_VERSION) {
+      localStorage.setItem('app_version', APP_VERSION);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for (let reg of regs) reg.unregister();
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(keys => {
+          for (let key of keys) caches.delete(key);
+        });
+      }
+      setTimeout(() => {
+        window.location.reload();
+      }, 250);
+    }
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS Ruang Temu</title>

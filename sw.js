@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-pwa-v4';
+const CACHE_NAME = 'pos-pwa-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -38,38 +38,26 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Fetch Strategy: Cache First, fallback to Network
+// Fetch Strategy: Network First, fallback to Cache
 self.addEventListener('fetch', (e) => {
-  // Only handle GET requests
   if (e.request.method !== 'GET') return;
 
   e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      // If not in cache, fetch from network
-      return fetch(e.request).then((networkResponse) => {
-        // Check if we received a valid response
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
-        }
-
-        // Clone response to save in dynamic cache
+    fetch(e.request).then((networkResponse) => {
+      // If response is valid, cache it and return
+      if (networkResponse && networkResponse.status === 200) {
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
-          // Do not cache Chrome extensions or external dynamic calls other than libraries
           const url = e.request.url;
           if (url.startsWith(self.location.origin) || url.includes('tailwindcss.com') || url.includes('cdnjs.cloudflare.com') || url.includes('unpkg.com')) {
             cache.put(e.request, responseToCache);
           }
         });
-
-        return networkResponse;
-      }).catch(() => {
-        // Offline fallback can be added here if needed
-      });
+      }
+      return networkResponse;
+    }).catch(() => {
+      // If offline, fallback to cache
+      return caches.match(e.request);
     })
   );
 });
