@@ -86,26 +86,53 @@
 
     /* Print Struk styling */
     @media print {
-      body * {
-        visibility: hidden;
+      body > :not(#modal-receipt) {
+        display: none !important;
       }
-      #print-area, #print-area * {
-        visibility: visible;
+      #modal-receipt {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        background: white !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+      }
+      #modal-receipt > div {
+        border: none !important;
+        box-shadow: none !important;
+        background: white !important;
+        max-width: none !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      /* Hide receipt modal header and footer buttons */
+      #modal-receipt > div > :not(:nth-child(2)) {
+        display: none !important;
+      }
+      #modal-receipt > div > div:nth-child(2) {
+        padding: 0 !important;
+        background: white !important;
       }
       #print-area {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
+        max-height: none !important;
+        overflow: visible !important;
+        height: auto !important;
+        width: 100% !important;
         max-width: 80mm;
-        margin: 0;
-        padding: 5mm;
+        padding: 0 !important;
+        margin: 0 auto !important;
         color: #000 !important;
         background: #fff !important;
         font-family: 'Courier New', Courier, monospace;
-        font-size: 12px;
+        font-size: 11px;
+        line-height: 1.2;
       }
-      /* Hide scrollbar, header, and extra info during print */
       @page {
         margin: 0;
       }
@@ -141,6 +168,10 @@
         <button id="btn-nav-reports" onclick="switchView('reports')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
           <i class="fa-solid fa-chart-line text-lg"></i>
           <span>Laporan Penjualan</span>
+        </button>
+        <button id="btn-nav-settings" onclick="openStoreSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <i class="fa-solid fa-gears text-lg"></i>
+          <span>Pengaturan Toko</span>
         </button>
       </nav>
     </div>
@@ -181,6 +212,11 @@
         <button onclick="resetDatabaseHandler()" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
           <i class="fa-solid fa-arrows-rotate"></i>
           <span class="hidden sm:inline">Reset Sampel</span>
+        </button>
+        <!-- Settings Button -->
+        <button onclick="openStoreSettingsModal()" title="Pengaturan Toko" class="bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+          <i class="fa-solid fa-gears"></i>
+          <span class="hidden sm:inline">Pengaturan</span>
         </button>
       </div>
 
@@ -229,7 +265,7 @@
         </div>
 
         <!-- Products Scroll Grid -->
-        <div class="flex-grow overflow-y-auto min-h-0">
+        <div class="flex-grow overflow-y-auto min-h-0 pb-20 md:pb-0">
           <div id="products-grid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
             <!-- Dynamically Rendered Products -->
           </div>
@@ -308,7 +344,7 @@
     </section>
 
     <!-- VIEW 2: PRODUCTS -->
-    <section id="view-products" class="hidden flex-grow p-8 overflow-y-auto">
+    <section id="view-products" class="hidden flex-grow p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto">
       <div class="max-w-6xl mx-auto space-y-6">
         <!-- Controls Bar -->
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -363,7 +399,7 @@
     </section>
 
     <!-- VIEW 3: REPORTS / DASHBOARD -->
-    <section id="view-reports" class="hidden flex-grow p-8 overflow-y-auto">
+    <section id="view-reports" class="hidden flex-grow p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto">
       <div class="max-w-6xl mx-auto space-y-8">
         <!-- Filter bar -->
         <div class="flex justify-between items-center flex-wrap gap-4">
@@ -592,6 +628,53 @@
           Tutup
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: STORE SETTINGS -->
+  <div id="modal-store-settings" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+      <!-- Header -->
+      <div class="px-6 py-5 border-b border-slate-800 flex justify-between items-center bg-dark-950/40">
+        <h3 class="font-bold text-white text-lg flex items-center gap-2">
+          <i class="fa-solid fa-gears text-primary-500"></i>
+          <span>Pengaturan Toko</span>
+        </h3>
+        <button onclick="closeStoreSettingsModal()" class="text-slate-400 hover:text-white transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Form -->
+      <form id="form-store-settings" onsubmit="saveStoreSettingsHandler(event)" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Nama Toko</label>
+          <input type="text" id="setting-store-name" required class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Alamat Toko</label>
+          <textarea id="setting-store-address" required rows="2" class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-sm resize-none"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">No. Telepon</label>
+            <input type="text" id="setting-store-phone" required class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pajak PPN (%)</label>
+            <input type="number" id="setting-store-tax" required min="0" max="100" class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Kaki Struk (Footer)</label>
+          <input type="text" id="setting-store-footer" required class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-sm">
+        </div>
+
+        <div class="pt-4 border-t border-slate-800 flex justify-end gap-3">
+          <button type="button" onclick="closeStoreSettingsModal()" class="px-5 py-2.5 border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-sm transition-colors">Batal</button>
+          <button type="submit" class="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-glow-primary">Simpan Pengaturan</button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -97,8 +97,8 @@ async function loadInitialData() {
   State.storeInfo = await DB.getSettings('store_info');
 
   if (State.storeInfo) {
-    State.taxRate = State.storeInfo.taxRate || 10;
-    State.serviceChargeRate = State.storeInfo.serviceCharge || 5;
+    State.taxRate = State.storeInfo.taxRate ?? 10;
+    State.serviceChargeRate = State.storeInfo.serviceCharge ?? 0;
     document.getElementById('sidebar-store-name').innerText = State.storeInfo.name;
     document.getElementById('label-cart-tax').innerText = `${State.taxRate + State.serviceChargeRate}%`;
   }
@@ -141,7 +141,8 @@ function switchView(viewName) {
   const navButtons = {
     cashier: document.getElementById('btn-nav-cashier'),
     products: document.getElementById('btn-nav-products'),
-    reports: document.getElementById('btn-nav-reports')
+    reports: document.getElementById('btn-nav-reports'),
+    settings: document.getElementById('btn-nav-settings')
   };
 
   Object.keys(navButtons).forEach((key) => {
@@ -1488,5 +1489,78 @@ async function resetDatabaseHandler() {
       console.error(err);
       alert("Terjadi kesalahan saat meriset database.");
     }
+  }
+}
+
+
+// Store Settings Modal UI Handlers
+function openStoreSettingsModal() {
+  const modal = document.getElementById('modal-store-settings');
+  if (!modal) return;
+  
+  const nameInput = document.getElementById('setting-store-name');
+  const addrInput = document.getElementById('setting-store-address');
+  const phoneInput = document.getElementById('setting-store-phone');
+  const taxInput = document.getElementById('setting-store-tax');
+  const footerInput = document.getElementById('setting-store-footer');
+  
+  if (State.storeInfo) {
+    nameInput.value = State.storeInfo.name || '';
+    addrInput.value = State.storeInfo.address || '';
+    phoneInput.value = State.storeInfo.phone || '';
+    taxInput.value = typeof State.storeInfo.taxRate !== 'undefined' ? State.storeInfo.taxRate : 11;
+    footerInput.value = State.storeInfo.receiptFooter || '';
+  } else {
+    nameInput.value = 'Ruang Temu Gadget';
+    addrInput.value = 'MTC Mall Lantai 2, Jakarta';
+    phoneInput.value = '0812-9876-5432';
+    taxInput.value = 11;
+    footerInput.value = 'Terima kasih atas kunjungan Anda!';
+  }
+  
+  modal.classList.remove('hidden');
+}
+
+function closeStoreSettingsModal() {
+  const modal = document.getElementById('modal-store-settings');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+async function saveStoreSettingsHandler(event) {
+  event.preventDefault();
+  
+  const name = document.getElementById('setting-store-name').value;
+  const address = document.getElementById('setting-store-address').value;
+  const phone = document.getElementById('setting-store-phone').value;
+  const taxRate = parseFloat(document.getElementById('setting-store-tax').value);
+  const receiptFooter = document.getElementById('setting-store-footer').value;
+  
+  const newSettings = {
+    name,
+    address,
+    phone,
+    taxRate,
+    serviceCharge: State.storeInfo ? (State.storeInfo.serviceCharge ?? 0) : 0,
+    currency: 'IDR',
+    receiptFooter
+  };
+  
+  try {
+    await DB.saveSettings('store_info', newSettings);
+    State.storeInfo = newSettings;
+    State.taxRate = taxRate;
+    
+    // Update headers and text fields in UI
+    document.getElementById('sidebar-store-name').innerText = name;
+    document.getElementById('label-cart-tax').innerText = `${State.taxRate + State.serviceChargeRate}%`;
+    
+    renderCart();
+    closeStoreSettingsModal();
+    showToast("Pengaturan Toko berhasil disimpan!");
+  } catch (err) {
+    console.error('Failed to save settings:', err);
+    alert('Gagal menyimpan pengaturan toko.');
   }
 }
