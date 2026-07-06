@@ -112,7 +112,7 @@
     }
   </style>
 </head>
-<body class="bg-dark-950 text-slate-200 font-sans min-h-screen flex overflow-hidden">
+<body class="bg-dark-950 text-slate-200 font-sans h-screen h-[100dvh] flex overflow-hidden">
 
   <!-- Sidebar Navigasi -->
   <aside class="hidden md:flex w-64 bg-dark-900 border-r border-slate-800 flex-col justify-between flex-shrink-0 z-20">
@@ -177,6 +177,11 @@
         <h2 id="view-title" class="text-lg md:text-xl font-bold text-white">Mesin Kasir</h2>
         <!-- Clock / Time -->
         <span id="digital-clock" class="text-xs md:text-sm font-mono text-slate-400 bg-slate-800/40 px-2 py-0.5 md:px-3 md:py-1 rounded-md border border-slate-800">20:45:00</span>
+        <!-- Reset Button -->
+        <button onclick="resetDatabaseHandler()" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          <span class="hidden sm:inline">Reset Sampel</span>
+        </button>
       </div>
 
       <!-- Quick Scan Info & Scanner gun indicator -->

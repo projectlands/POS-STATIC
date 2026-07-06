@@ -1466,3 +1466,25 @@ function renderSalesTrendChart(txList, dateStartStr, dateEndStr) {
     });
   }
 }
+
+
+// Global Database Reset to default electronic sample data
+async function resetDatabaseHandler() {
+  if (confirm("Apakah Anda yakin ingin menghapus semua data dan memulihkan data sampel elektronik? Tindakan ini akan menghapus semua produk kustom dan transaksi Anda.")) {
+    try {
+      const req = indexedDB.deleteDatabase('pos_database');
+      req.onsuccess = () => {
+        showToast("Database berhasil di-reset!");
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
+      };
+      req.onerror = () => {
+        alert("Gagal menghapus database.");
+      };
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat meriset database.");
+    }
+  }
+}
