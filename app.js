@@ -121,14 +121,23 @@ function initClock() {
 
 // View switcher / Routing (SPA)
 function switchView(viewName) {
+  // If desktop screen size and trying to open mobile cart view, redirect to cashier
+  if (window.innerWidth >= 768 && viewName === 'cart') {
+    viewName = 'cashier';
+  }
+
   State.activeView = viewName;
   
-  // Hide all view screens
+  // Hide all main view screens
   document.getElementById('view-cashier').classList.add('hidden');
   document.getElementById('view-products').classList.add('hidden');
   document.getElementById('view-reports').classList.add('hidden');
 
-  // Remove active styling from all nav buttons
+  // Handle cashier sections for mobile (products list vs cart list)
+  const prodSec = document.getElementById('cashier-products-section');
+  const cartSec = document.getElementById('cashier-cart-section');
+
+  // Remove active styling from desktop nav buttons
   const navButtons = {
     cashier: document.getElementById('btn-nav-cashier'),
     products: document.getElementById('btn-nav-products'),
@@ -141,20 +150,52 @@ function switchView(viewName) {
     }
   });
 
-  // Display correct screen & set button styling
+  // Remove active styling from mobile nav buttons
+  const mNavButtons = {
+    cashier: document.getElementById('btn-m-nav-cashier'),
+    cart: document.getElementById('btn-m-nav-cart'),
+    products: document.getElementById('btn-m-nav-products'),
+    reports: document.getElementById('btn-m-nav-reports')
+  };
+
+  Object.keys(mNavButtons).forEach((key) => {
+    if (mNavButtons[key]) {
+      mNavButtons[key].className = "flex flex-col items-center justify-center w-16 text-slate-400 relative";
+    }
+  });
+
+  // Show/Hide views based on viewName
   if (viewName === 'cashier') {
     document.getElementById('view-cashier').classList.remove('hidden');
-    navButtons.cashier.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
+    prodSec.classList.remove('hidden');
+    prodSec.classList.add('flex');
+    cartSec.classList.add('hidden');
+    cartSec.classList.remove('flex', 'w-full');
+    
+    if (navButtons.cashier) navButtons.cashier.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
+    if (mNavButtons.cashier) mNavButtons.cashier.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Mesin Kasir";
     renderProducts();
+  } else if (viewName === 'cart') {
+    document.getElementById('view-cashier').classList.remove('hidden');
+    prodSec.classList.add('hidden');
+    prodSec.classList.remove('flex');
+    cartSec.classList.remove('hidden');
+    cartSec.classList.add('flex', 'w-full');
+    
+    if (mNavButtons.cart) mNavButtons.cart.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    document.getElementById('view-title').innerText = "Keranjang";
+    renderCart();
   } else if (viewName === 'products') {
     document.getElementById('view-products').classList.remove('hidden');
-    navButtons.products.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
+    if (navButtons.products) navButtons.products.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
+    if (mNavButtons.products) mNavButtons.products.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Kelola Produk";
     renderInventoryTable();
   } else if (viewName === 'reports') {
     document.getElementById('view-reports').classList.remove('hidden');
-    navButtons.reports.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
+    if (navButtons.reports) navButtons.reports.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
+    if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Laporan Penjualan";
     
     // Set default dates for report
@@ -369,6 +410,18 @@ function renderCart() {
   const container = document.getElementById('cart-items');
   const btnCheckout = document.getElementById('btn-checkout');
   if (!container) return;
+
+  // Update mobile cart badge
+  const totalQty = State.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const badgeEl = document.getElementById('cart-badge');
+  if (badgeEl) {
+    if (totalQty > 0) {
+      badgeEl.innerText = totalQty;
+      badgeEl.classList.remove('hidden');
+    } else {
+      badgeEl.classList.add('hidden');
+    }
+  }
 
   if (State.cart.length === 0) {
     container.innerHTML = `
@@ -848,6 +901,7 @@ function closeReceiptModal() {
 
 async function renderInventoryTable() {
   const tbody = document.getElementById('inventory-table-body');
+  const mobList = document.getElementById('inventory-mobile-list');
   if (!tbody) return;
 
   const searchQuery = document.getElementById('search-inventory').value.toLowerCase().trim();
@@ -857,6 +911,7 @@ async function renderInventoryTable() {
     return p.name.toLowerCase().includes(searchQuery) || p.code.toLowerCase().includes(searchQuery);
   });
 
+  // Render Desktop view
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
@@ -865,45 +920,91 @@ async function renderInventoryTable() {
         </td>
       </tr>
     `;
-    return;
+  } else {
+    let html = '';
+    filtered.forEach(p => {
+      html += `
+        <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
+          <td class="p-4 pl-6 flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+              <i class="fa-solid ${p.icon || 'fa-tag'}"></i>
+            </div>
+            <div>
+              <div class="font-bold text-slate-200 text-sm">${p.name}</div>
+            </div>
+          </td>
+          <td class="p-4 text-slate-400 font-medium">${p.category}</td>
+          <td class="p-4 font-mono text-slate-400 font-semibold">${p.code}</td>
+          <td class="p-4 text-right font-medium">Rp ${p.cost.toLocaleString('id-ID')}</td>
+          <td class="p-4 text-right font-bold text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</td>
+          <td class="p-4 text-center">
+            <span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${p.stock <= 5 ? 'bg-danger-500/20 text-danger-400' : 'bg-success-500/20 text-success-400'}">
+              ${p.stock} pcs
+            </span>
+          </td>
+          <td class="p-4 text-right pr-6">
+            <div class="flex justify-end gap-2">
+              <button onclick="editProduct(${p.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-500 rounded-lg transition-colors border border-slate-700/50">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button onclick="deleteProductHandler(${p.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-danger-500 rounded-lg transition-colors border border-slate-700/50">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+    tbody.innerHTML = html;
   }
 
-  let html = '';
-  filtered.forEach(p => {
-    html += `
-      <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
-        <td class="p-4 pl-6 flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
-            <i class="fa-solid ${p.icon || 'fa-tag'}"></i>
+  // Render Mobile view
+  if (mobList) {
+    if (filtered.length === 0) {
+      mobList.innerHTML = `
+        <div class="py-8 text-center text-slate-500 font-semibold text-xs">
+          Tidak ada produk terdaftar dalam katalog
+        </div>
+      `;
+    } else {
+      let mHtml = '';
+      filtered.forEach(p => {
+        mHtml += `
+          <div class="py-4 flex items-center justify-between gap-4 animate-[fadeIn_0.15s_ease-out]">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
+                <i class="fa-solid ${p.icon || 'fa-tag'}"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="font-bold text-slate-200 text-sm truncate">${p.name}</div>
+                <div class="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                  <span class="bg-slate-800 px-1.5 py-0.5 rounded font-medium">${p.category}</span>
+                  <span class="font-mono text-slate-500">QR: ${p.code}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-4 flex-shrink-0">
+              <div class="text-right">
+                <div class="font-extrabold text-sm text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Stok: <span class="font-bold text-slate-300">${p.stock}</span></div>
+              </div>
+              
+              <div class="flex gap-1.5">
+                <button onclick="editProduct(${p.id})" class="w-8 h-8 bg-slate-800 hover:bg-slate-700 text-amber-500 rounded-lg flex items-center justify-center transition-colors border border-slate-700/50">
+                  <i class="fa-solid fa-pen-to-square text-xs"></i>
+                </button>
+                <button onclick="deleteProductHandler(${p.id})" class="w-8 h-8 bg-slate-800 hover:bg-slate-700 text-danger-500 rounded-lg flex items-center justify-center transition-colors border border-slate-700/50">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+            </div>
           </div>
-          <div>
-            <div class="font-bold text-slate-200 text-sm">${p.name}</div>
-          </div>
-        </td>
-        <td class="p-4 text-slate-400 font-medium">${p.category}</td>
-        <td class="p-4 font-mono text-slate-400 font-semibold">${p.code}</td>
-        <td class="p-4 text-right font-medium">Rp ${p.cost.toLocaleString('id-ID')}</td>
-        <td class="p-4 text-right font-bold text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</td>
-        <td class="p-4 text-center">
-          <span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${p.stock <= 5 ? 'bg-danger-500/20 text-danger-400' : 'bg-success-500/20 text-success-400'}">
-            ${p.stock} pcs
-          </span>
-        </td>
-        <td class="p-4 text-right pr-6">
-          <div class="flex justify-end gap-2">
-            <button onclick="editProduct(${p.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-500 rounded-lg transition-colors border border-slate-700/50">
-              <i class="fa-solid fa-pen-to-square"></i>
-            </button>
-            <button onclick="deleteProductHandler(${p.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-danger-500 rounded-lg transition-colors border border-slate-700/50">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  });
-
-  tbody.innerHTML = html;
+        `;
+      });
+      mobList.innerHTML = mHtml;
+    }
+  }
 }
 
 function openProductModal(mode, prodId = null) {
@@ -1078,11 +1179,13 @@ async function loadReportData() {
 
 function renderTransactionsHistoryTable(txList) {
   const tbody = document.getElementById('transactions-table-body');
+  const mobList = document.getElementById('transactions-mobile-list');
   if (!tbody) return;
 
   // Sort descending by timestamp
   const sorted = txList.sort((a, b) => b.timestamp - a.timestamp);
 
+  // Render Desktop
   if (sorted.length === 0) {
     tbody.innerHTML = `
       <tr>
@@ -1091,35 +1194,70 @@ function renderTransactionsHistoryTable(txList) {
         </td>
       </tr>
     `;
-    return;
+  } else {
+    let html = '';
+    sorted.forEach(tx => {
+      const dateStr = new Date(tx.timestamp).toLocaleString('id-ID');
+      html += `
+        <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
+          <td class="p-4 pl-6 font-mono font-bold text-slate-300">${tx.id}</td>
+          <td class="p-4 text-slate-400">${dateStr}</td>
+          <td class="p-4 text-center">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
+              tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400' : tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'
+            }">${tx.paymentMethod}</span>
+          </td>
+          <td class="p-4 text-right text-slate-400">Rp ${(tx.taxSvc - tx.discount).toLocaleString('id-ID')}</td>
+          <td class="p-4 text-right font-bold text-white">Rp ${tx.total.toLocaleString('id-ID')}</td>
+          <td class="p-4 text-right pr-6">
+            <button onclick="viewTransactionDetail('${tx.id}')" class="text-xs text-primary-500 hover:underline">
+              Lihat Struk
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+    tbody.innerHTML = html;
   }
 
-  let html = '';
-  sorted.forEach(tx => {
-    const dateStr = new Date(tx.timestamp).toLocaleString('id-ID');
-    const details = tx.items.map(i => `${i.name} (${i.quantity})`).join(', ');
-
-    html += `
-      <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
-        <td class="p-4 pl-6 font-mono font-bold text-slate-300">${tx.id}</td>
-        <td class="p-4 text-slate-400">${dateStr}</td>
-        <td class="p-4 text-center">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
-            tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400' : tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'
-          }">${tx.paymentMethod}</span>
-        </td>
-        <td class="p-4 text-right text-slate-400">Rp ${(tx.taxSvc - tx.discount).toLocaleString('id-ID')}</td>
-        <td class="p-4 text-right font-bold text-white">Rp ${tx.total.toLocaleString('id-ID')}</td>
-        <td class="p-4 text-right pr-6">
-          <button onclick="viewTransactionDetail('${tx.id}')" class="text-xs text-primary-500 hover:underline">
-            Lihat Struk
-          </button>
-        </td>
-      </tr>
-    `;
-  });
-
-  tbody.innerHTML = html;
+  // Render Mobile
+  if (mobList) {
+    if (sorted.length === 0) {
+      mobList.innerHTML = `
+        <div class="py-8 text-center text-slate-500 font-semibold text-xs">
+          Tidak ada transaksi pada rentang tanggal ini
+        </div>
+      `;
+    } else {
+      let mHtml = '';
+      sorted.forEach(tx => {
+        const dateStr = new Date(tx.timestamp).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+        mHtml += `
+          <div class="py-4 flex items-center justify-between gap-4 animate-[fadeIn_0.15s_ease-out]">
+            <div class="min-w-0">
+              <div class="font-mono font-bold text-slate-200 text-sm truncate">${tx.id}</div>
+              <div class="text-[10px] text-slate-400 flex items-center gap-2 mt-1">
+                <span>${dateStr}</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                  tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400' : tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'
+                }">${tx.paymentMethod}</span>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-3.5 flex-shrink-0">
+              <div class="text-right">
+                <div class="font-extrabold text-sm text-white">Rp ${tx.total.toLocaleString('id-ID')}</div>
+                <button onclick="viewTransactionDetail('${tx.id}')" class="text-[10px] text-primary-500 hover:underline mt-0.5 block">
+                  Lihat Struk
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      mobList.innerHTML = mHtml;
+    }
+  }
 }
 
 async function viewTransactionDetail(txId) {

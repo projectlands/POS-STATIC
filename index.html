@@ -115,7 +115,7 @@
 <body class="bg-dark-950 text-slate-200 font-sans min-h-screen flex overflow-hidden">
 
   <!-- Sidebar Navigasi -->
-  <aside class="w-64 bg-dark-900 border-r border-slate-800 flex flex-col justify-between flex-shrink-0 z-20">
+  <aside class="hidden md:flex w-64 bg-dark-900 border-r border-slate-800 flex-col justify-between flex-shrink-0 z-20">
     <div>
       <!-- Header / Logo -->
       <div class="h-20 flex items-center px-6 border-b border-slate-800 gap-3">
@@ -169,14 +169,14 @@
   </aside>
 
   <!-- Main Content Wrapper -->
-  <main class="flex-grow flex flex-col min-w-0 overflow-hidden bg-dark-950">
+  <main class="flex-grow flex flex-col min-w-0 overflow-hidden bg-dark-950 pb-16 md:pb-0">
 
     <!-- Top Bar -->
-    <header class="h-20 bg-dark-900 border-b border-slate-800 flex items-center justify-between px-8 flex-shrink-0 z-10">
-      <div class="flex items-center gap-4">
-        <h2 id="view-title" class="text-xl font-bold text-white">Mesin Kasir</h2>
+    <header class="h-16 md:h-20 bg-dark-900 border-b border-slate-800 flex items-center justify-between px-4 md:px-8 flex-shrink-0 z-10">
+      <div class="flex items-center gap-3 md:gap-4">
+        <h2 id="view-title" class="text-lg md:text-xl font-bold text-white">Mesin Kasir</h2>
         <!-- Clock / Time -->
-        <span id="digital-clock" class="text-sm font-mono text-slate-400 bg-slate-800/40 px-3 py-1 rounded-md border border-slate-800">20:45:00</span>
+        <span id="digital-clock" class="text-xs md:text-sm font-mono text-slate-400 bg-slate-800/40 px-2 py-0.5 md:px-3 md:py-1 rounded-md border border-slate-800">20:45:00</span>
       </div>
 
       <!-- Quick Scan Info & Scanner gun indicator -->
@@ -201,31 +201,31 @@
     <!-- VIEW 1: CASHIER -->
     <section id="view-cashier" class="flex-grow flex min-h-0">
       <!-- Product Grid Section -->
-      <div class="flex-grow flex flex-col p-6 min-w-0 overflow-hidden">
+      <div id="cashier-products-section" class="flex-grow flex flex-col p-4 md:p-6 min-w-0 overflow-hidden">
         <!-- Search & Quick Action bar -->
-        <div class="flex gap-4 mb-6 flex-shrink-0">
+        <div class="flex gap-3 mb-4 md:mb-6 flex-shrink-0">
           <div class="relative flex-grow">
-            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
               <i class="fa-solid fa-magnifying-glass"></i>
             </span>
-            <input type="text" id="search-product" placeholder="Cari nama produk atau scan QR Code..." class="w-full pl-10 pr-4 py-3 rounded-xl bg-dark-900 border border-slate-800 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 text-slate-200 placeholder-slate-500 transition-colors">
+            <input type="text" id="search-product" placeholder="Cari nama produk atau scan..." class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-dark-900 border border-slate-800 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 text-slate-200 placeholder-slate-500 text-sm transition-colors">
           </div>
           
           <!-- Scan Camera Button -->
-          <button onclick="openCameraScanner()" class="bg-primary-600 hover:bg-primary-700 text-white font-semibold px-5 rounded-xl flex items-center gap-2 transition-all shadow-glow-primary">
+          <button onclick="openCameraScanner()" class="bg-primary-600 hover:bg-primary-700 text-white font-semibold px-4 rounded-xl flex items-center gap-1.5 transition-all shadow-glow-primary text-xs md:text-sm">
             <i class="fa-solid fa-camera"></i>
-            <span class="hidden sm:inline">Scan QR</span>
+            <span>Scan QR</span>
           </button>
         </div>
 
         <!-- Categories Filter -->
-        <div id="category-tabs" class="flex gap-2 mb-6 overflow-x-auto pb-2 flex-shrink-0">
+        <div id="category-tabs" class="flex gap-2 mb-4 md:mb-6 overflow-x-auto pb-2 flex-shrink-0">
           <!-- Dynamically Rendered -->
         </div>
 
         <!-- Products Scroll Grid -->
         <div class="flex-grow overflow-y-auto min-h-0">
-          <div id="products-grid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div id="products-grid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
             <!-- Dynamically Rendered Products -->
           </div>
           <!-- Empty State -->
@@ -237,7 +237,7 @@
       </div>
 
       <!-- Cart Sidebar Section -->
-      <div class="w-96 bg-dark-900 border-l border-slate-800 flex flex-col flex-shrink-0 justify-between min-h-0">
+      <div id="cashier-cart-section" class="hidden md:flex w-full md:w-96 bg-dark-900 md:border-l border-slate-800 flex-col flex-shrink-0 justify-between min-h-0 z-10">
         <!-- Cart Header -->
         <div class="p-4 border-b border-slate-800 flex items-center justify-between">
           <div class="flex items-center gap-2 font-bold text-white">
@@ -329,7 +329,8 @@
             </div>
           </div>
 
-          <div class="overflow-x-auto">
+          <!-- Desktop View Table -->
+          <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead>
                 <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase bg-slate-900/30">
@@ -346,6 +347,11 @@
                 <!-- Dynamically Rendered rows -->
               </tbody>
             </table>
+          </div>
+
+          <!-- Mobile View List -->
+          <div id="inventory-mobile-list" class="block md:hidden divide-y divide-slate-800/60 p-4 space-y-4">
+            <!-- Dynamically Rendered on Mobile -->
           </div>
         </div>
       </div>
@@ -442,7 +448,8 @@
           <div class="p-5 border-b border-slate-800">
             <h4 class="font-bold text-white text-sm">Riwayat Transaksi Terkini</h4>
           </div>
-          <div class="overflow-x-auto">
+          <!-- Desktop View Table -->
+          <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left border-collapse text-sm">
               <thead>
                 <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase bg-slate-900/30">
@@ -458,6 +465,11 @@
                 <!-- Dynamically Rendered rows -->
               </tbody>
             </table>
+          </div>
+
+          <!-- Mobile View List -->
+          <div id="transactions-mobile-list" class="block md:hidden divide-y divide-slate-800/60 p-4 space-y-4">
+            <!-- Dynamically Rendered on Mobile -->
           </div>
         </div>
       </div>
@@ -684,6 +696,28 @@
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- Bottom Navigation Bar (Mobile Only) -->
+  <div class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-dark-900 border-t border-slate-800 flex justify-around items-center z-30 pb-safe">
+    <button onclick="switchView('cashier')" id="btn-m-nav-cashier" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+      <i class="fa-solid fa-cash-register text-base"></i>
+      <span class="text-[9px] mt-1 font-semibold">Kasir</span>
+    </button>
+    <button onclick="switchView('cart')" id="btn-m-nav-cart" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+      <i class="fa-solid fa-shopping-basket text-base"></i>
+      <span class="text-[9px] mt-1 font-semibold">Keranjang</span>
+      <!-- Cart Badge -->
+      <span id="cart-badge" class="hidden absolute top-0.5 right-2 bg-danger-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-dark-900">0</span>
+    </button>
+    <button onclick="switchView('products')" id="btn-m-nav-products" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+      <i class="fa-solid fa-box text-base"></i>
+      <span class="text-[9px] mt-1 font-semibold">Produk</span>
+    </button>
+    <button onclick="switchView('reports')" id="btn-m-nav-reports" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+      <i class="fa-solid fa-chart-line text-base"></i>
+      <span class="text-[9px] mt-1 font-semibold">Laporan</span>
+    </button>
   </div>
 
   <!-- App Core JS and Logic -->
