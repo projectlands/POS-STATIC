@@ -106,6 +106,24 @@ async function loadInitialData() {
   renderCategories();
   renderProducts();
   populateCategorySelects();
+
+  // Load saved cart state from localStorage
+  const savedCart = localStorage.getItem('pos_cart_cache');
+  if (savedCart) {
+    try {
+      const parsed = JSON.parse(savedCart);
+      State.cart = parsed.map(item => {
+        const product = State.products.find(p => p.id === item.productId);
+        if (product) {
+          return { product, quantity: item.quantity };
+        }
+        return null;
+      }).filter(Boolean);
+      renderCart();
+    } catch (err) {
+      console.error('Failed to load cart cache:', err);
+    }
+  }
 }
 
 // Digital clock ticking
@@ -374,6 +392,7 @@ function removeCartItem(productId) {
 function clearCart() {
   State.cart = [];
   State.discountPercent = 0;
+  localStorage.removeItem('pos_cart_cache');
   renderCart();
 }
 
@@ -495,6 +514,12 @@ function renderCart() {
   document.getElementById('cart-discount-value').innerText = `- Rp ${discountVal.toLocaleString('id-ID')}`;
   document.getElementById('cart-tax-value').innerText = `Rp ${totalTaxSvc.toLocaleString('id-ID')}`;
   document.getElementById('cart-total').innerText = `Rp ${totalBill.toLocaleString('id-ID')}`;
+
+  // Save cart state to localStorage
+  localStorage.setItem('pos_cart_cache', JSON.stringify(State.cart.map(item => ({
+    productId: item.product.id,
+    quantity: item.quantity
+  }))));
 }
 
 // ----------------------------------------------------
@@ -1508,6 +1533,9 @@ async function resetDatabaseHandler() {
         DB.db.close();
       }
       const req = indexedDB.deleteDatabase('pos_database');
+      req.onblocked = () => {
+        alert("Proses reset terhambat karena ada tab aplikasi POS lain yang masih terbuka. Harap tutup tab POS lainnya terlebih dahulu.");
+      };
       req.onsuccess = () => {
         showToast("Database berhasil di-reset!");
         setTimeout(() => {

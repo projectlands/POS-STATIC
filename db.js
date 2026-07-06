@@ -8,6 +8,11 @@ const DB = {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
+      request.onblocked = (e) => {
+        console.warn('Database open is blocked. Reloading to release locks...');
+        window.location.reload();
+      };
+
       request.onerror = (e) => {
         console.error('Database failed to open:', e);
         reject(e);
