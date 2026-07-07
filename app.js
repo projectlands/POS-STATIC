@@ -885,50 +885,67 @@ function renderReceipt(tx) {
   const shopPhone = State.storeInfo ? State.storeInfo.phone : '0812-9876-5432';
   const footer = State.storeInfo ? State.storeInfo.receiptFooter : 'Terima kasih atas kunjungan Anda!';
   
-  const dateStr = new Date(tx.timestamp).toLocaleString('id-ID');
+  const dateStr = new Date(tx.timestamp).toLocaleString('id-ID', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
 
   let itemsHtml = '';
   tx.items.forEach(item => {
-    const priceText = `${item.quantity} x ${item.price.toLocaleString('id-ID')}`;
-    const subtotalText = `Rp ${item.subtotal.toLocaleString('id-ID')}`;
-    itemsHtml += `
-${item.name.padEnd(20)}
-  ${priceText.padEnd(15)} ${subtotalText.padStart(15)}
-`;
+    // Left side: Qty x Price
+    const qtyPrice = `  ${item.quantity} x Rp ${item.price.toLocaleString('id-ID')}`;
+    // Right side: Subtotal
+    const itemSubtotal = `Rp ${item.subtotal.toLocaleString('id-ID')}`;
+    
+    itemsHtml += `${item.name}\n${formatReceiptLine(qtyPrice, itemSubtotal, 40)}\n`;
   });
 
-  // Split and dynamically center-align text lines for thermal roll layout (40 cols)
-  const nameLine = centerText(shopName.toUpperCase());
-  const addrLines = shopAddr.split(/\r?\n/).map(line => centerText(line)).join('\n');
-  const phoneLine = centerText(`Telp: ${shopPhone}`);
-  const footerLines = footer.split(/\r?\n/).map(line => centerText(line)).join('\n');
+  // Split, wrap, and dynamically center-align text lines for thermal roll layout (40 cols)
+  const nameLine = shopName.split(/\r?\n/).map(line => wrapAndCenter(line.toUpperCase())).join('\n');
+  const addrLines = shopAddr.split(/\r?\n/).map(line => wrapAndCenter(line)).join('\n');
+  const phoneLine = wrapAndCenter(`Telp: ${shopPhone}`);
+  const footerLines = footer.split(/\r?\n/).map(line => wrapAndCenter(line)).join('\n');
 
-  const rawReceipt = `
-========================================
+  const metadataLines = [
+    formatReceiptLine("No Nota  :", tx.id, 40),
+    formatReceiptLine("Tanggal  :", dateStr, 40),
+    formatReceiptLine("Kasir    :", "Administrator", 40)
+  ].join('\n');
+
+  const summaryLines = [
+    formatReceiptLine("Subtotal", `Rp ${tx.subtotal.toLocaleString('id-ID')}`, 40),
+    formatReceiptLine("Diskon", `-Rp ${tx.discount.toLocaleString('id-ID')}`, 40),
+    formatReceiptLine("Pajak & Layanan", `Rp ${tx.taxSvc.toLocaleString('id-ID')}`, 40)
+  ].join('\n');
+
+  const totalLine = formatReceiptLine("TOTAL", `Rp ${tx.total.toLocaleString('id-ID')}`, 40);
+  const paymentLine = formatReceiptLine(`Bayar (${tx.paymentMethod})`, `Rp ${tx.amountPaid.toLocaleString('id-ID')}`, 40);
+  const changeLine = formatReceiptLine("Kembalian", `Rp ${tx.change.toLocaleString('id-ID')}`, 40);
+
+  const rawReceipt = `========================================
 ${nameLine}
 ${addrLines}
 ${phoneLine}
-========================================
-No Nota  : ${tx.id}
-Tanggal  : ${dateStr}
-Kasir    : Administrator
-========================================
-${itemsHtml.trim()}
-========================================
-Subtotal       : Rp ${tx.subtotal.toLocaleString('id-ID').padStart(15)}
-Diskon         : Rp ${tx.discount.toLocaleString('id-ID').padStart(15)}
-Pajak PPN      : Rp ${tx.taxSvc.toLocaleString('id-ID').padStart(15)}
 ----------------------------------------
-TOTAL          : Rp ${tx.total.toLocaleString('id-ID').padStart(15)}
+${metadataLines}
+----------------------------------------
+${itemsHtml.trim()}
+----------------------------------------
+${summaryLines}
+----------------------------------------
+${totalLine}
 ========================================
-Bayar (${tx.paymentMethod.padEnd(4)})  : Rp ${tx.amountPaid.toLocaleString('id-ID').padStart(15)}
-Kembalian      : Rp ${tx.change.toLocaleString('id-ID').padStart(15)}
+${paymentLine}
+${changeLine}
 ========================================
 ${footerLines}
-========================================
-`;
+========================================`;
 
-  const receiptHtml = `<pre class="whitespace-pre-wrap leading-tight text-[11px] font-mono text-black">${rawReceipt}</pre>`;
+  const receiptHtml = `<pre class="whitespace-pre font-mono text-black leading-relaxed text-[11px]">${rawReceipt}</pre>`;
   
   if (preview) preview.innerHTML = receiptHtml;
   if (printArea) printArea.innerHTML = receiptHtml;
@@ -1193,17 +1210,19 @@ async function loadReportData() {
 
   // Calculate Metrics
   let revenue = 0;
+  let netSales = 0;
   let cost = 0;
   let txCount = filteredTx.length;
 
   filteredTx.forEach(tx => {
     revenue += tx.total;
+    netSales += (tx.subtotal - (tx.discount || 0));
     tx.items.forEach(item => {
       cost += (item.cost || 0) * item.quantity;
     });
   });
 
-  const profit = revenue - cost;
+  const profit = netSales - cost;
   const avgBill = txCount > 0 ? Math.round(revenue / txCount) : 0;
 
   // Render Metric values
@@ -1652,3 +1671,59 @@ function formatLocalDate(timestamp) {
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+// Parse local date string "YYYY-MM-DD" to millisecond timestamp
+function parseLocalDate(dateStr, endOfDay = false) {
+  const parts = dateStr.split('-');
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  
+  const d = new Date(year, month, day);
+  if (endOfDay) {
+    d.setHours(23, 59, 59, 999);
+  } else {
+    d.setHours(0, 0, 0, 0);
+  }
+  return d.getTime();
+}
+
+// Format a single line of receipt with left-aligned and right-aligned text
+function formatReceiptLine(left, right, width = 40) {
+  const leftStr = String(left);
+  const rightStr = String(right);
+  const spacesNeeded = width - leftStr.length - rightStr.length;
+  if (spacesNeeded <= 0) {
+    return leftStr + ' ' + rightStr;
+  }
+  return leftStr + ' '.repeat(spacesNeeded) + rightStr;
+}
+
+// Wrap a text string to max width without breaking words, and center each wrapped line
+function wrapAndCenter(text, width = 40) {
+  if (!text) return '';
+  const words = text.trim().split(/\s+/);
+  const lines = [];
+  let currentLine = '';
+
+  words.forEach(word => {
+    if ((currentLine + (currentLine ? ' ' : '') + word).length <= width) {
+      currentLine += (currentLine ? ' ' : '') + word;
+    } else {
+      if (currentLine) {
+        lines.push(centerText(currentLine, width));
+      }
+      currentLine = word;
+      if (currentLine.length > width) {
+        currentLine = currentLine.substring(0, width);
+      }
+    }
+  });
+  if (currentLine) {
+    lines.push(centerText(currentLine, width));
+  }
+  return lines.join('\n');
+}
+
+
+
