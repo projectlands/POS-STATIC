@@ -111,6 +111,16 @@
       }
     }
     @media print {
+      html, body {
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        color: #000 !important;
+        width: 80mm !important;
+      }
       body > :not(#print-area) {
         display: none !important;
       }
@@ -121,16 +131,23 @@
         top: 0 !important;
         width: 80mm !important;
         margin: 0 !important;
-        padding: 4mm !important;
+        padding: 2mm !important;
         box-sizing: border-box !important;
-        color: #000 !important;
         background: #fff !important;
+        color: #000 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      #print-area pre {
         font-family: 'Courier New', Courier, monospace !important;
-        font-size: 12px !important;
-        line-height: 1.25 !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        white-space: pre !important;
+        margin: 0 !important;
+        padding: 0 !important;
       }
       @page {
-        size: 80mm auto !important;
+        size: 80mm auto;
         margin: 0 !important;
       }
     }
