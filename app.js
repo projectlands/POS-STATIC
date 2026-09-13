@@ -65,29 +65,58 @@ function registerServiceWorker() {
   }
 
   // Handle PWA Install prompt
-  let deferredPrompt;
   const installBtn = document.getElementById('btn-install-pwa');
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    installBtn.classList.remove('hidden');
-  });
-
-  installBtn.addEventListener('click', async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to install prompt: ${outcome}`);
-      deferredPrompt = null;
-      installBtn.classList.add('hidden');
+    if (installBtn) installBtn.classList.remove('hidden');
+    const mInstallBadge = document.getElementById('m-menu-install-badge');
+    if (mInstallBadge) {
+      mInstallBadge.innerText = 'Tersedia';
+      mInstallBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse';
     }
   });
 
+  if (installBtn) {
+    installBtn.addEventListener('click', triggerPWAInstall);
+  }
+
   window.addEventListener('appinstalled', () => {
     console.log('POS App installed to homescreen!');
-    installBtn.classList.add('hidden');
+    if (installBtn) installBtn.classList.add('hidden');
+    const mInstallBadge = document.getElementById('m-menu-install-badge');
+    if (mInstallBadge) {
+      mInstallBadge.innerText = 'Terpasang';
+      mInstallBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+    }
   });
+
+  // Inisialisasi modul CloudDB jika ada
+  if (typeof CloudDB !== 'undefined') {
+    initCloudModule();
+  }
+}
+
+// Global PWA Trigger function for Mobile Menu & Header
+let deferredPrompt = null;
+function triggerPWAInstall() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(({ outcome }) => {
+      console.log(`User response to install prompt: ${outcome}`);
+      deferredPrompt = null;
+      const installBtn = document.getElementById('btn-install-pwa');
+      if (installBtn) installBtn.classList.add('hidden');
+      const mInstallBadge = document.getElementById('m-menu-install-badge');
+      if (mInstallBadge) {
+        mInstallBadge.innerText = 'Terpasang';
+        mInstallBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+      }
+    });
+  } else {
+    showToast('Untuk pasang di HP: buka menu browser (titik 3 di Chrome atau tombol Share di Safari) lalu pilih "Tambahkan ke Layar Utama" (Add to Home screen).', 'info');
+  }
 }
 
 // Database Loading
@@ -174,12 +203,13 @@ function switchView(viewName) {
     cashier: document.getElementById('btn-m-nav-cashier'),
     cart: document.getElementById('btn-m-nav-cart'),
     products: document.getElementById('btn-m-nav-products'),
-    reports: document.getElementById('btn-m-nav-reports')
+    reports: document.getElementById('btn-m-nav-reports'),
+    menu: document.getElementById('btn-m-nav-menu')
   };
 
   Object.keys(mNavButtons).forEach((key) => {
     if (mNavButtons[key]) {
-      mNavButtons[key].className = "flex flex-col items-center justify-center w-16 text-slate-400 relative";
+      mNavButtons[key].className = "flex flex-col items-center justify-center flex-1 py-1 text-slate-400 relative";
     }
   });
 
@@ -192,7 +222,7 @@ function switchView(viewName) {
     cartSec.classList.remove('flex', 'w-full');
     
     if (navButtons.cashier) navButtons.cashier.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.cashier) mNavButtons.cashier.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.cashier) mNavButtons.cashier.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Mesin Kasir";
     renderProducts();
   } else if (viewName === 'cart') {
@@ -202,19 +232,19 @@ function switchView(viewName) {
     cartSec.classList.remove('hidden');
     cartSec.classList.add('flex', 'w-full');
     
-    if (mNavButtons.cart) mNavButtons.cart.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.cart) mNavButtons.cart.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Keranjang";
     renderCart();
   } else if (viewName === 'products') {
     document.getElementById('view-products').classList.remove('hidden');
     if (navButtons.products) navButtons.products.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.products) mNavButtons.products.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.products) mNavButtons.products.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Kelola Produk";
     renderInventoryTable();
   } else if (viewName === 'reports') {
     document.getElementById('view-reports').classList.remove('hidden');
     if (navButtons.reports) navButtons.reports.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Laporan Penjualan";
     
     // Set default dates for report (using local date string)
@@ -1723,6 +1753,246 @@ function wrapAndCenter(text, width = 40) {
     lines.push(centerText(currentLine, width));
   }
   return lines.join('\n');
+}
+
+
+// ====================================================
+// CLOUD DATABASE INTEGRATION (FIREBASE FIRESTORE)
+// ====================================================
+
+function initCloudModule() {
+  if (typeof CloudDB === 'undefined') return;
+
+  CloudDB.onStatusChange = (status, message) => {
+    updateCloudStatusUI(status, message);
+  };
+
+  CloudDB.init().then((connected) => {
+    console.log('CloudDB initialized. Connected:', connected);
+    updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+  }).catch((err) => {
+    console.error('CloudDB init error:', err);
+    updateCloudStatusUI('error', err.message);
+  });
+
+  updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+}
+
+function updateCloudStatusUI(status, message) {
+  const badge = document.getElementById('cloud-status-badge');
+  const dot = document.getElementById('cloud-status-dot');
+  const text = document.getElementById('cloud-status-text');
+  const headerDot = document.getElementById('cloud-header-dot');
+  const modalBadge = document.getElementById('cloud-modal-status-badge');
+  const alertIcon = document.getElementById('cloud-status-alert-icon');
+  const alertTitle = document.getElementById('cloud-status-alert-title');
+  const alertDesc = document.getElementById('cloud-status-alert-desc');
+  const mMenuStatus = document.getElementById('m-menu-cloud-status');
+  const mNavDot = document.getElementById('m-nav-menu-dot');
+
+  let dotColor = 'bg-slate-500';
+  let badgeText = 'Lokal Saja';
+  let textColor = 'text-slate-400';
+  let alertIconClass = 'fa-solid fa-circle-info text-sky-400';
+  let alertTitleText = 'Status Cloud: Lokal Saja';
+
+  if (status === 'connected') {
+    dotColor = 'bg-emerald-500';
+    badgeText = 'Cloud Aktif';
+    textColor = 'text-emerald-400';
+    alertIconClass = 'fa-solid fa-circle-check text-emerald-400';
+    alertTitleText = 'Terhubung ke Firebase Firestore';
+  } else if (status === 'connecting') {
+    dotColor = 'bg-amber-500 animate-ping';
+    badgeText = 'Menghubungkan...';
+    textColor = 'text-amber-400';
+    alertIconClass = 'fa-solid fa-arrows-rotate fa-spin text-amber-400';
+    alertTitleText = 'Sedang Menghubungkan ke Cloud...';
+  } else if (status === 'error') {
+    dotColor = 'bg-danger-500';
+    badgeText = 'Koneksi Error';
+    textColor = 'text-danger-400';
+    alertIconClass = 'fa-solid fa-triangle-exclamation text-danger-400';
+    alertTitleText = 'Koneksi Cloud Bermasalah';
+  }
+
+  if (dot) dot.className = `w-2 h-2 rounded-full ${dotColor}`;
+  if (text) text.innerText = badgeText;
+  if (badge) badge.className = `flex items-center gap-1.5 font-medium ${textColor} cursor-pointer transition-colors`;
+  if (headerDot) headerDot.className = `w-1.5 h-1.5 rounded-full ${dotColor}`;
+  if (modalBadge) {
+    modalBadge.innerText = badgeText;
+    modalBadge.className = `text-[10px] font-semibold px-2 py-0.5 rounded-full ${textColor} bg-dark-950 border border-slate-800`;
+  }
+  if (mMenuStatus) {
+    mMenuStatus.innerText = badgeText;
+    mMenuStatus.className = `text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${textColor} bg-dark-950 border border-slate-800`;
+  }
+  if (mNavDot) {
+    mNavDot.className = `w-1.5 h-1.5 rounded-full absolute -top-0.5 -right-1.5 ${dotColor}`;
+  }
+  if (alertIcon) alertIcon.className = `${alertIconClass} mt-0.5 text-base`;
+  if (alertTitle) alertTitle.innerText = alertTitleText;
+  if (alertDesc) alertDesc.innerText = message || 'Aplikasi siap digunakan.';
+}
+
+function openCloudSettingsModal() {
+  const modal = document.getElementById('modal-cloud-settings');
+  if (!modal) return;
+
+  const config = CloudDB.getConfig() || {};
+  document.getElementById('cloud-project-id').value = config.projectId || '';
+  document.getElementById('cloud-api-key').value = config.apiKey || '';
+  document.getElementById('cloud-auth-domain').value = config.authDomain || '';
+  document.getElementById('cloud-storage-bucket').value = config.storageBucket || '';
+  document.getElementById('cloud-messaging-sender-id').value = config.messagingSenderId || '';
+  document.getElementById('cloud-app-id').value = config.appId || '';
+  document.getElementById('cloud-toggle-enabled').checked = config.enabled !== false;
+
+  updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+  modal.classList.remove('hidden');
+}
+
+function closeCloudSettingsModal() {
+  const modal = document.getElementById('modal-cloud-settings');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function saveCloudConfigHandler(e) {
+  e.preventDefault();
+  const config = {
+    projectId: document.getElementById('cloud-project-id').value.trim(),
+    apiKey: document.getElementById('cloud-api-key').value.trim(),
+    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
+    storageBucket: document.getElementById('cloud-storage-bucket').value.trim(),
+    messagingSenderId: document.getElementById('cloud-messaging-sender-id').value.trim(),
+    appId: document.getElementById('cloud-app-id').value.trim(),
+    enabled: document.getElementById('cloud-toggle-enabled').checked
+  };
+
+  CloudDB.saveConfig(config);
+
+  if (!config.enabled) {
+    CloudDB.disconnect();
+    showToast('Mode Cloud dinonaktifkan. Aplikasi berjalan secara offline lokal.', 'info');
+    closeCloudSettingsModal();
+    return;
+  }
+
+  showToast('Menghubungkan ke Firebase...', 'info');
+  const connected = await CloudDB.connect(config);
+  if (connected) {
+    showToast('Berhasil terhubung ke Firebase Firestore!', 'success');
+  } else {
+    showToast('Gagal terhubung. Silakan periksa Project ID dan API Key Anda.', 'error');
+  }
+}
+
+async function testCloudConnectionHandler() {
+  const config = {
+    projectId: document.getElementById('cloud-project-id').value.trim(),
+    apiKey: document.getElementById('cloud-api-key').value.trim(),
+    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
+    storageBucket: document.getElementById('cloud-storage-bucket').value.trim(),
+    messagingSenderId: document.getElementById('cloud-messaging-sender-id').value.trim(),
+    appId: document.getElementById('cloud-app-id').value.trim()
+  };
+
+  if (!config.projectId || !config.apiKey) {
+    alert('Project ID dan API Key wajib diisi untuk melakukan test.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-test-cloud');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Testing...';
+
+  try {
+    const res = await CloudDB.testConnection(config);
+    alert(res.message || 'Koneksi ke Firebase Firestore Sukses!');
+  } catch (err) {
+    console.error('Test connection error:', err);
+    alert('Koneksi Gagal: ' + (err.message || err.code || 'Periksa kredensial Firebase Anda.'));
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+async function syncUploadAllHandler() {
+  if (!CloudDB.firestore) {
+    alert('Cloud belum terhubung. Harap simpan konfigurasi dan pastikan koneksi tersambung terlebih dahulu.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-sync-upload');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Mengunggah...';
+
+  try {
+    const result = await CloudDB.uploadAllLocalData(DB);
+    showToast(`Berhasil upload: ${result.productsCount} produk, ${result.transactionsCount} transaksi!`, 'success');
+  } catch (err) {
+    console.error('Upload to cloud error:', err);
+    alert('Gagal mengunggah data: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+async function syncDownloadAllHandler() {
+  if (!CloudDB.firestore) {
+    alert('Cloud belum terhubung. Harap simpan konfigurasi dan pastikan koneksi tersambung terlebih dahulu.');
+    return;
+  }
+
+  const confirmed = confirm('Perhatian: Mengunduh data dari cloud akan menyinkronkan produk dan transaksi cloud ke memori perangkat ini. Lanjutkan?');
+  if (!confirmed) return;
+
+  const btn = document.getElementById('btn-sync-download');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Mengunduh...';
+
+  try {
+    const result = await CloudDB.downloadAllCloudData();
+    await DB.importFromCloud(result);
+    await loadInitialData();
+    if (State.activeView === 'cashier') {
+      renderProducts();
+    } else if (State.activeView === 'products') {
+      renderInventoryTable();
+    } else if (State.activeView === 'reports') {
+      loadReportData();
+    }
+    showToast(`Berhasil download: ${result.productsCount} produk, ${result.transactionsCount} transaksi!`, 'success');
+  } catch (err) {
+    console.error('Download from cloud error:', err);
+    alert('Gagal mengunduh data: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+
+// ====================================================
+// MOBILE MENU DRAWER (MODAL BOTTOM SHEET)
+// ====================================================
+
+function openMobileMenuModal() {
+  const modal = document.getElementById('modal-mobile-menu');
+  if (!modal) return;
+  updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+  modal.classList.remove('hidden');
+}
+
+function closeMobileMenuModal() {
+  const modal = document.getElementById('modal-mobile-menu');
+  if (modal) modal.classList.add('hidden');
 }
 
 

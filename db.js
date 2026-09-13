@@ -109,8 +109,8 @@ const DB = {
     });
   },
 
-  saveProduct(product) {
-    return this.execute('products', 'readwrite', (store) => {
+  async saveProduct(product) {
+    const res = await this.execute('products', 'readwrite', (store) => {
       if (product.id) {
         product.id = Number(product.id);
         return store.put(product);
@@ -118,10 +118,20 @@ const DB = {
         return store.add(product);
       }
     });
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      const savedProd = { ...product };
+      if (!savedProd.id && typeof res === 'number') savedProd.id = res;
+      CloudDB.syncProduct(savedProd).catch(console.error);
+    }
+    return res;
   },
 
-  deleteProduct(id) {
-    return this.execute('products', 'readwrite', (store) => store.delete(Number(id)));
+  async deleteProduct(id) {
+    const res = await this.execute('products', 'readwrite', (store) => store.delete(Number(id)));
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.deleteProduct(id).catch(console.error);
+    }
+    return res;
   },
 
   // Categories CRUD
@@ -129,8 +139,8 @@ const DB = {
     return this.execute('categories', 'readonly', (store) => store.getAll());
   },
 
-  saveCategory(category) {
-    return this.execute('categories', 'readwrite', (store) => {
+  async saveCategory(category) {
+    const res = await this.execute('categories', 'readwrite', (store) => {
       if (category.id) {
         category.id = Number(category.id);
         return store.put(category);
@@ -138,10 +148,20 @@ const DB = {
         return store.add(category);
       }
     });
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      const savedCat = { ...category };
+      if (!savedCat.id && typeof res === 'number') savedCat.id = res;
+      CloudDB.syncCategory(savedCat).catch(console.error);
+    }
+    return res;
   },
 
-  deleteCategory(id) {
-    return this.execute('categories', 'readwrite', (store) => store.delete(Number(id)));
+  async deleteCategory(id) {
+    const res = await this.execute('categories', 'readwrite', (store) => store.delete(Number(id)));
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.deleteCategory(id).catch(console.error);
+    }
+    return res;
   },
 
   // Transactions CRUD
@@ -149,8 +169,12 @@ const DB = {
     return this.execute('transactions', 'readonly', (store) => store.getAll());
   },
 
-  saveTransaction(transaction) {
-    return this.execute('transactions', 'readwrite', (store) => store.add(transaction));
+  async saveTransaction(transaction) {
+    const res = await this.execute('transactions', 'readwrite', (store) => store.add(transaction));
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.syncTransaction(transaction).catch(console.error);
+    }
+    return res;
   },
 
   deleteTransaction(id) {
@@ -166,8 +190,32 @@ const DB = {
     });
   },
 
-  saveSettings(key, value) {
-    return this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
+  async saveSettings(key, value) {
+    const res = await this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
+    return res;
+  },
+
+  // Import data dari Cloud Firestore ke IndexedDB Lokal
+  async importFromCloud({ products, categories, transactions, storeInfo }) {
+    if (categories && categories.length > 0) {
+      for (const cat of categories) {
+        await this.execute('categories', 'readwrite', (store) => store.put(cat));
+      }
+    }
+    if (products && products.length > 0) {
+      for (const prod of products) {
+        await this.execute('products', 'readwrite', (store) => store.put(prod));
+      }
+    }
+    if (transactions && transactions.length > 0) {
+      for (const trx of transactions) {
+        await this.execute('transactions', 'readwrite', (store) => store.put(trx));
+      }
+    }
+    if (storeInfo) {
+      await this.saveSettings('store_info', storeInfo);
+    }
+    return true;
   },
 
   // Seeding initial premium products & settings
