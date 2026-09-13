@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   switchView('cashier');
 
+  // Initialize Cloud Database (Firebase)
+  initCloudDB();
+
   // Load digital state indicators
   updateConnectionStatus();
   window.addEventListener('online', updateConnectionStatus);
@@ -97,11 +100,14 @@ async function loadInitialData() {
   State.storeInfo = await DB.getSettings('store_info');
 
   if (State.storeInfo) {
-    State.taxRate = State.storeInfo.taxRate ?? 10;
+    State.taxRate = State.storeInfo.taxRate ?? 0;
     State.serviceChargeRate = State.storeInfo.serviceCharge ?? 0;
-    document.getElementById('sidebar-store-name').innerText = State.storeInfo.name;
-    document.getElementById('label-cart-tax').innerText = `${State.taxRate + State.serviceChargeRate}%`;
+    const taxLabel = document.getElementById('label-cart-tax');
+    if (taxLabel) taxLabel.innerText = `${State.taxRate + State.serviceChargeRate}%`;
   }
+
+  // Update store switcher and branding UI
+  updateStoreBrandingUI();
 
   renderCategories();
   renderProducts();
@@ -215,15 +221,10 @@ function switchView(viewName) {
     document.getElementById('view-reports').classList.remove('hidden');
     if (navButtons.reports) navButtons.reports.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
     if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
-    document.getElementById('view-title').innerText = "Laporan Penjualan";
+    document.getElementById('view-title').innerText = "Laporan Modal & Untung";
     
-    // Set default dates for report (using local date string)
-    const todayStr = getLocalDateString(0);
-    const sevenDaysAgoStr = getLocalDateString(-6);
-    document.getElementById('filter-date-start').value = sevenDaysAgoStr;
-    document.getElementById('filter-date-end').value = todayStr;
-    
-    loadReportData();
+    // Default to Today for daily profit & modal tracking
+    setReportDatePreset('today');
   }
 }
 
@@ -301,6 +302,8 @@ function renderProducts() {
 
     const accentColor = colorClasses[p.color] || colorClasses.indigo;
 
+    const isBundle = p.piecesPerUnit && p.piecesPerUnit > 1;
+
     html += `
       <div onclick="addToCart(${p.id})" class="group cursor-pointer bg-dark-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 flex flex-col justify-between h-48 transition-all hover:-translate-y-1 hover:shadow-lg relative overflow-hidden">
         <!-- Accent Glow background decoration -->
@@ -311,17 +314,25 @@ function renderProducts() {
           <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${accentColor} flex items-center justify-center border">
             <i class="fa-solid ${p.icon || 'fa-tag'} text-lg"></i>
           </div>
-          <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700/80 text-slate-400">
-            #${p.code}
-          </span>
+          <div class="flex flex-col items-end gap-1">
+            <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700/80 text-slate-400">
+              #${p.code}
+            </span>
+            ${isBundle ? `<span class="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.5 rounded border border-amber-500/30">${p.piecesPerUnit} Tusuk</span>` : ''}
+          </div>
         </div>
 
         <!-- Product Info -->
         <div class="mt-4 space-y-1">
           <h4 class="font-bold text-slate-200 text-sm group-hover:text-white line-clamp-2 leading-snug">${p.name}</h4>
           <div class="flex justify-between items-center pt-1 border-t border-slate-800/50 mt-1">
-            <span class="font-extrabold text-sm text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</span>
-            <span class="text-[10px] ${p.stock <= 5 ? 'text-danger-500 font-bold' : 'text-slate-500'}">Stok: ${p.stock}</span>
+            <div>
+              <span class="font-extrabold text-sm text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</span>
+              ${p.cost > 0 ? `<span class="block text-[9px] text-slate-500">Modal: Rp ${p.cost.toLocaleString('id-ID')}</span>` : ''}
+            </div>
+            <span class="text-[10px] ${p.stock <= 5 ? 'text-danger-500 font-bold' : 'text-slate-500'}">
+              ${p.isSempol ? 'Stok Bahan: ' : 'Stok: '}${p.stock}
+            </span>
           </div>
         </div>
       </div>
@@ -829,14 +840,22 @@ async function submitTransaction() {
   const transaction = {
     id: txId,
     timestamp: now.getTime(),
-    items: State.cart.map(item => ({
-      productId: item.product.id,
-      name: item.product.name,
-      price: item.product.price,
-      cost: item.product.cost || 0,
-      quantity: item.quantity,
-      subtotal: item.product.price * item.quantity
-    })),
+    items: State.cart.map(item => {
+      const piecesPerUnit = item.product.piecesPerUnit || 1;
+      const totalPieces = piecesPerUnit * item.quantity;
+      return {
+        productId: item.product.id,
+        name: item.product.name,
+        price: item.product.price,
+        cost: item.product.cost || 0,
+        unitCost: item.product.unitCost || 0,
+        piecesPerUnit: piecesPerUnit,
+        totalPieces: totalPieces,
+        isSempol: !!item.product.isSempol,
+        quantity: item.quantity,
+        subtotal: item.product.price * item.quantity
+      };
+    }),
     subtotal: checkoutTotals.subtotal,
     discount: checkoutTotals.discount,
     taxSvc: checkoutTotals.taxSvc,
@@ -850,16 +869,33 @@ async function submitTransaction() {
     // Save to Database
     await DB.saveTransaction(transaction);
 
-    // Deduct stocks locally
+    // Calculate total sempol sticks to deduct from shared stock
+    let sempolSticksDeducted = 0;
+    State.cart.forEach(item => {
+      if (item.product.isSempol) {
+        sempolSticksDeducted += (item.product.piecesPerUnit || 1) * item.quantity;
+      }
+    });
+
+    if (sempolSticksDeducted > 0) {
+      // Deduct from ALL sempol products in the shared inventory
+      const currentSempolStock = await DB.getSempolStock();
+      const newSempolStock = Math.max(0, currentSempolStock - sempolSticksDeducted);
+      await DB.updateSempolStock(newSempolStock);
+    }
+
+    // Deduct stocks for non-sempol items
     for (const item of State.cart) {
-      const prod = State.products.find(p => p.id === item.product.id);
-      if (prod) {
-        prod.stock = Math.max(0, prod.stock - item.quantity);
-        await DB.saveProduct(prod);
+      if (!item.product.isSempol) {
+        const prod = State.products.find(p => p.id === item.product.id);
+        if (prod) {
+          prod.stock = Math.max(0, prod.stock - item.quantity);
+          await DB.saveProduct(prod);
+        }
       }
     }
 
-    // Refresh data
+    // Refresh data & stock UI
     await loadInitialData();
 
     // Render receipt view modal
@@ -993,7 +1029,11 @@ async function renderInventoryTable() {
               <i class="fa-solid ${p.icon || 'fa-tag'}"></i>
             </div>
             <div>
-              <div class="font-bold text-slate-200 text-sm">${p.name}</div>
+              <div class="font-bold text-slate-200 text-sm flex items-center gap-1.5">
+                <span>${p.name}</span>
+                ${p.piecesPerUnit && p.piecesPerUnit > 1 ? `<span class="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.5 rounded border border-amber-500/30">${p.piecesPerUnit} Tusuk</span>` : ''}
+              </div>
+              ${p.unitCost ? `<div class="text-[10px] text-slate-500">Modal Satuan: Rp ${p.unitCost.toLocaleString('id-ID')} / tusuk</div>` : ''}
             </div>
           </td>
           <td class="p-4 text-slate-400 font-medium">${p.category}</td>
@@ -1002,7 +1042,7 @@ async function renderInventoryTable() {
           <td class="p-4 text-right font-bold text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</td>
           <td class="p-4 text-center">
             <span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${p.stock <= 5 ? 'bg-danger-500/20 text-danger-400' : 'bg-success-500/20 text-success-400'}">
-              ${p.stock} pcs
+              ${p.stock} ${p.isSempol ? 'tusuk' : 'pcs'}
             </span>
           </td>
           <td class="p-4 text-right pr-6">
@@ -1079,17 +1119,51 @@ function openProductModal(mode, prodId = null) {
   document.getElementById('product-id').value = '';
   State.activeProductEdit = null;
 
+  const isSempolStore = DB.getActiveStoreId() === 'store_sempol';
+  document.getElementById('product-is-sempol').checked = isSempolStore;
+  document.getElementById('product-pieces').value = 1;
+  document.getElementById('product-unit-cost').value = 400;
+
   if (mode === 'add') {
     title.innerText = "Tambah Produk Baru";
+    if (isSempolStore) {
+      document.getElementById('product-color').value = 'amber';
+      document.getElementById('product-icon').value = 'fa-utensils';
+    }
   } else {
     title.innerText = "Edit Produk";
   }
 
+  toggleSempolFields();
   modal.classList.remove('hidden');
 }
 
 function closeProductModal() {
   document.getElementById('modal-product').classList.add('hidden');
+}
+
+function toggleSempolFields() {
+  const isChecked = document.getElementById('product-is-sempol').checked;
+  const fields = document.getElementById('sempol-product-fields');
+  const hint = document.getElementById('sempol-calc-hint');
+  if (isChecked) {
+    fields.classList.remove('hidden');
+    hint.classList.remove('hidden');
+    calculateProductCostFromUnit();
+  } else {
+    fields.classList.add('hidden');
+    hint.classList.add('hidden');
+  }
+}
+
+function calculateProductCostFromUnit() {
+  const isSempol = document.getElementById('product-is-sempol').checked;
+  if (!isSempol) return;
+  const pieces = Number(document.getElementById('product-pieces').value) || 1;
+  const unitCost = Number(document.getElementById('product-unit-cost').value) || 0;
+  if (pieces > 0 && unitCost > 0) {
+    document.getElementById('product-cost').value = pieces * unitCost;
+  }
 }
 
 function populateCategorySelects() {
@@ -1118,17 +1192,34 @@ async function editProduct(id) {
   document.getElementById('product-stock').value = prod.stock;
   document.getElementById('product-color').value = prod.color || 'indigo';
   document.getElementById('product-icon').value = prod.icon || 'fa-tag';
+  document.getElementById('product-is-sempol').checked = !!prod.isSempol;
+  document.getElementById('product-pieces').value = prod.piecesPerUnit || 1;
+  document.getElementById('product-unit-cost').value = prod.unitCost || 400;
+
+  toggleSempolFields();
 }
 
 async function saveProductHandler(e) {
   e.preventDefault();
 
   const id = document.getElementById('product-id').value;
+  const isSempol = document.getElementById('product-is-sempol').checked;
+  const piecesPerUnit = Number(document.getElementById('product-pieces').value) || 1;
+  const unitCost = Number(document.getElementById('product-unit-cost').value) || 0;
+  let cost = Number(document.getElementById('product-cost').value);
+
+  if (isSempol && piecesPerUnit > 0 && unitCost > 0 && cost === 0) {
+    cost = piecesPerUnit * unitCost;
+  }
+
   const product = {
     name: document.getElementById('product-name').value,
     category: document.getElementById('product-category').value,
     code: document.getElementById('product-code').value.trim(),
-    cost: Number(document.getElementById('product-cost').value),
+    cost: cost,
+    unitCost: unitCost,
+    piecesPerUnit: piecesPerUnit,
+    isSempol: isSempol,
     price: Number(document.getElementById('product-price').value),
     stock: Number(document.getElementById('product-stock').value),
     color: document.getElementById('product-color').value,
@@ -1144,7 +1235,7 @@ async function saveProductHandler(e) {
     await loadInitialData();
     closeProductModal();
     renderInventoryTable();
-    showToast("Produk berhasil disimpan!");
+    showToast("Produk berhasil disimpan!", "success");
   } catch (err) {
     console.error("Gagal menyimpan produk:", err);
     alert("Gagal menyimpan produk. Periksa apakah kode QR/Barcode sudah digunakan produk lain.");
@@ -1192,6 +1283,44 @@ async function manageCategoriesPrompt() {
 // REPORTS & ANALYTICS VIEWS
 // ----------------------------------------------------
 
+function setReportDatePreset(preset) {
+  const startInput = document.getElementById('filter-date-start');
+  const endInput = document.getElementById('filter-date-end');
+  const todayStr = getLocalDateString(0);
+
+  // Update preset button active styling
+  const presets = ['today', 'yesterday', '7days', 'thismonth'];
+  presets.forEach(p => {
+    const btn = document.getElementById(`btn-preset-${p}`);
+    if (btn) {
+      if (p === preset) {
+        btn.className = 'px-2.5 py-1 rounded-md font-semibold text-white bg-primary-600 transition-all';
+      } else {
+        btn.className = 'px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition-all';
+      }
+    }
+  });
+
+  if (preset === 'today') {
+    startInput.value = todayStr;
+    endInput.value = todayStr;
+  } else if (preset === 'yesterday') {
+    const yestStr = getLocalDateString(-1);
+    startInput.value = yestStr;
+    endInput.value = yestStr;
+  } else if (preset === '7days') {
+    startInput.value = getLocalDateString(-6);
+    endInput.value = todayStr;
+  } else if (preset === 'thismonth') {
+    const now = new Date();
+    const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    startInput.value = firstDayStr;
+    endInput.value = todayStr;
+  }
+
+  loadReportData();
+}
+
 async function loadReportData() {
   const dateStartStr = document.getElementById('filter-date-start').value;
   const dateEndStr = document.getElementById('filter-date-end').value;
@@ -1212,6 +1341,8 @@ async function loadReportData() {
   let revenue = 0;
   let netSales = 0;
   let cost = 0;
+  let totalPieces = 0;
+  let totalItemsCount = 0;
   let txCount = filteredTx.length;
 
   filteredTx.forEach(tx => {
@@ -1219,17 +1350,34 @@ async function loadReportData() {
     netSales += (tx.subtotal - (tx.discount || 0));
     tx.items.forEach(item => {
       cost += (item.cost || 0) * item.quantity;
+      const pieces = item.totalPieces || ((item.piecesPerUnit || 1) * item.quantity);
+      totalPieces += pieces;
+      totalItemsCount += item.quantity;
     });
   });
 
   const profit = netSales - cost;
-  const avgBill = txCount > 0 ? Math.round(revenue / txCount) : 0;
+  const marginPercent = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+  const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
 
   // Render Metric values
   document.getElementById('report-stat-revenue').innerText = `Rp ${revenue.toLocaleString('id-ID')}`;
+  document.getElementById('report-stat-cost').innerText = `Rp ${cost.toLocaleString('id-ID')}`;
   document.getElementById('report-stat-profit').innerText = `Rp ${profit.toLocaleString('id-ID')}`;
+  document.getElementById('report-stat-margin').innerText = `${marginPercent}% Untung`;
   document.getElementById('report-stat-count').innerText = txCount;
-  document.getElementById('report-stat-avg').innerText = `Rp ${avgBill.toLocaleString('id-ID')}`;
+
+  const volumeLabel = document.getElementById('report-stat-volume-label');
+  const volumeEl = document.getElementById('report-stat-volume');
+  if (volumeLabel && volumeEl) {
+    if (isSempolMode) {
+      volumeLabel.innerText = "Total Tusuk Terjual";
+      volumeEl.innerText = `${totalPieces} Tusuk`;
+    } else {
+      volumeLabel.innerText = "Total Produk Terjual";
+      volumeEl.innerText = `${totalItemsCount} Pcs`;
+    }
+  }
 
   // Render transactions history table
   renderTransactionsHistoryTable(filteredTx);
@@ -1253,7 +1401,7 @@ function renderTransactionsHistoryTable(txList) {
   if (sorted.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="p-8 text-center text-slate-500 font-semibold">
+        <td colspan="8" class="p-8 text-center text-slate-500 font-semibold">
           Tidak ada transaksi pada rentang tanggal ini
         </td>
       </tr>
@@ -1261,20 +1409,33 @@ function renderTransactionsHistoryTable(txList) {
   } else {
     let html = '';
     sorted.forEach(tx => {
-      const dateStr = new Date(tx.timestamp).toLocaleString('id-ID');
+      const dateStr = new Date(tx.timestamp).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+      let txCost = 0;
+      let itemsSummary = [];
+      tx.items.forEach(it => {
+        txCost += (it.cost || 0) * it.quantity;
+        const pieceInfo = it.totalPieces && it.totalPieces > it.quantity ? ` (${it.totalPieces} tusuk)` : '';
+        itemsSummary.push(`${it.name} x${it.quantity}${pieceInfo}`);
+      });
+      const txProfit = (tx.subtotal - (tx.discount || 0)) - txCost;
+
       html += `
         <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
           <td class="p-4 pl-6 font-mono font-bold text-slate-300">${tx.id}</td>
-          <td class="p-4 text-slate-400">${dateStr}</td>
+          <td class="p-4 text-slate-400 whitespace-nowrap">${dateStr}</td>
+          <td class="p-4 text-slate-300 max-w-xs truncate" title="${itemsSummary.join(', ')}">
+            ${itemsSummary.join(', ')}
+          </td>
           <td class="p-4 text-center">
             <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
               tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400' : tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'
             }">${tx.paymentMethod}</span>
           </td>
-          <td class="p-4 text-right text-slate-400">Rp ${(tx.taxSvc - tx.discount).toLocaleString('id-ID')}</td>
           <td class="p-4 text-right font-bold text-white">Rp ${tx.total.toLocaleString('id-ID')}</td>
+          <td class="p-4 text-right text-rose-400 font-medium">Rp ${txCost.toLocaleString('id-ID')}</td>
+          <td class="p-4 text-right font-extrabold text-emerald-400">+Rp ${txProfit.toLocaleString('id-ID')}</td>
           <td class="p-4 text-right pr-6">
-            <button onclick="viewTransactionDetail('${tx.id}')" class="text-xs text-primary-500 hover:underline">
+            <button onclick="viewTransactionDetail('${tx.id}')" class="text-xs text-primary-500 hover:underline font-semibold">
               Lihat Struk
             </button>
           </td>
@@ -1296,24 +1457,27 @@ function renderTransactionsHistoryTable(txList) {
       let mHtml = '';
       sorted.forEach(tx => {
         const dateStr = new Date(tx.timestamp).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+        let txCost = 0;
+        let itemsSummary = [];
+        tx.items.forEach(it => {
+          txCost += (it.cost || 0) * it.quantity;
+          itemsSummary.push(`${it.name} x${it.quantity}`);
+        });
+        const txProfit = (tx.subtotal - (tx.discount || 0)) - txCost;
+
         mHtml += `
-          <div class="py-4 flex items-center justify-between gap-4 animate-[fadeIn_0.15s_ease-out]">
-            <div class="min-w-0">
-              <div class="font-mono font-bold text-slate-200 text-sm truncate">${tx.id}</div>
-              <div class="text-[10px] text-slate-400 flex items-center gap-2 mt-1">
-                <span>${dateStr}</span>
-                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                  tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400' : tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'
-                }">${tx.paymentMethod}</span>
-              </div>
+          <div class="py-4 flex flex-col gap-2 animate-[fadeIn_0.15s_ease-out]">
+            <div class="flex items-center justify-between">
+              <div class="font-mono font-bold text-slate-200 text-sm">${tx.id}</div>
+              <div class="font-extrabold text-sm text-white">Rp ${tx.total.toLocaleString('id-ID')}</div>
             </div>
-            
-            <div class="flex items-center gap-3.5 flex-shrink-0">
-              <div class="text-right">
-                <div class="font-extrabold text-sm text-white">Rp ${tx.total.toLocaleString('id-ID')}</div>
-                <button onclick="viewTransactionDetail('${tx.id}')" class="text-[10px] text-primary-500 hover:underline mt-0.5 block">
-                  Lihat Struk
-                </button>
+            <div class="text-xs text-slate-400 line-clamp-1">${itemsSummary.join(', ')}</div>
+            <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/40">
+              <div class="text-slate-500 text-[11px]">${dateStr} &bull; ${tx.paymentMethod}</div>
+              <div class="flex items-center gap-3">
+                <span class="text-rose-400 text-[11px]">Modal: Rp ${txCost.toLocaleString('id-ID')}</span>
+                <span class="text-emerald-400 font-bold">Untung: +Rp ${txProfit.toLocaleString('id-ID')}</span>
+                <button onclick="viewTransactionDetail('${tx.id}')" class="text-[11px] text-primary-500 underline ml-1">Struk</button>
               </div>
             </div>
           </div>
@@ -1724,6 +1888,497 @@ function wrapAndCenter(text, width = 40) {
   }
   return lines.join('\n');
 }
+
+// Global Toast Notification Helper
+function showToast(message, type = 'info') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  const bgClass = type === 'error' ? 'bg-danger-600' : (type === 'success' ? 'bg-success-600' : 'bg-slate-800 border border-slate-700');
+  toast.className = `${bgClass} text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 transform transition-all duration-300 translate-y-4 opacity-0 pointer-events-auto`;
+  toast.innerHTML = `
+    <i class="fa-solid ${type === 'error' ? 'fa-circle-xmark' : (type === 'success' ? 'fa-circle-check text-emerald-300' : 'fa-circle-info text-sky-400')}"></i>
+    <span>${message}</span>
+  `;
+
+  container.appendChild(toast);
+  requestAnimationFrame(() => {
+    toast.classList.remove('translate-y-4', 'opacity-0');
+  });
+
+  setTimeout(() => {
+    toast.classList.add('translate-y-4', 'opacity-0');
+    setTimeout(() => toast.remove(), 300);
+  }, 3200);
+}
+
+
+// ====================================================
+// CLOUD DATABASE (FIREBASE FIRESTORE) UI & SYNC LOGIC
+// ====================================================
+
+function initCloudDB() {
+  if (typeof CloudDB === 'undefined') return;
+
+  CloudDB.onStatusChange = (status, message) => {
+    updateCloudStatusUI(status, message);
+  };
+
+  CloudDB.init().catch(err => {
+    console.warn('CloudDB init error:', err);
+  });
+
+  updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+}
+
+function updateCloudStatusUI(status, message) {
+  const badge = document.getElementById('cloud-status-badge');
+  const dot = document.getElementById('cloud-status-dot');
+  const text = document.getElementById('cloud-status-text');
+  const headerDot = document.getElementById('cloud-header-dot');
+  const modalBadge = document.getElementById('cloud-modal-status-badge');
+  const alertIcon = document.getElementById('cloud-status-alert-icon');
+  const alertTitle = document.getElementById('cloud-status-alert-title');
+  const alertDesc = document.getElementById('cloud-status-alert-desc');
+
+  let dotColor = 'bg-slate-500';
+  let badgeText = 'Lokal Saja';
+  let textColor = 'text-slate-400';
+  let alertIconClass = 'fa-solid fa-circle-info text-sky-400';
+  let alertTitleText = 'Status Cloud: Lokal Saja';
+
+  if (status === 'connected') {
+    dotColor = 'bg-emerald-500';
+    badgeText = 'Cloud Aktif';
+    textColor = 'text-emerald-400';
+    alertIconClass = 'fa-solid fa-circle-check text-emerald-400';
+    alertTitleText = 'Terhubung ke Firebase Firestore';
+  } else if (status === 'connecting') {
+    dotColor = 'bg-amber-500 animate-ping';
+    badgeText = 'Menghubungkan...';
+    textColor = 'text-amber-400';
+    alertIconClass = 'fa-solid fa-arrows-rotate fa-spin text-amber-400';
+    alertTitleText = 'Sedang Menghubungkan ke Cloud...';
+  } else if (status === 'error') {
+    dotColor = 'bg-danger-500';
+    badgeText = 'Koneksi Error';
+    textColor = 'text-danger-400';
+    alertIconClass = 'fa-solid fa-triangle-exclamation text-danger-400';
+    alertTitleText = 'Koneksi Cloud Bermasalah';
+  }
+
+  if (dot) dot.className = `w-2 h-2 rounded-full ${dotColor}`;
+  if (text) text.innerText = badgeText;
+  if (badge) badge.className = `flex items-center gap-1.5 font-medium ${textColor} cursor-pointer transition-colors`;
+  if (headerDot) headerDot.className = `w-1.5 h-1.5 rounded-full ${dotColor}`;
+  if (modalBadge) {
+    modalBadge.innerText = badgeText;
+    modalBadge.className = `text-[10px] font-semibold px-2 py-0.5 rounded-full ${textColor} bg-dark-950 border border-slate-800`;
+  }
+  if (alertIcon) alertIcon.className = `${alertIconClass} mt-0.5 text-base`;
+  if (alertTitle) alertTitle.innerText = alertTitleText;
+  if (alertDesc) alertDesc.innerText = message || 'Aplikasi siap digunakan.';
+}
+
+function openCloudSettingsModal() {
+  const modal = document.getElementById('modal-cloud-settings');
+  if (!modal) return;
+
+  const config = CloudDB.getConfig() || {};
+  document.getElementById('cloud-project-id').value = config.projectId || '';
+  document.getElementById('cloud-api-key').value = config.apiKey || '';
+  document.getElementById('cloud-auth-domain').value = config.authDomain || '';
+  document.getElementById('cloud-storage-bucket').value = config.storageBucket || '';
+  document.getElementById('cloud-messaging-sender-id').value = config.messagingSenderId || '';
+  document.getElementById('cloud-app-id').value = config.appId || '';
+  document.getElementById('cloud-toggle-enabled').checked = config.enabled !== false;
+
+  updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+  modal.classList.remove('hidden');
+}
+
+function closeCloudSettingsModal() {
+  const modal = document.getElementById('modal-cloud-settings');
+  if (modal) modal.classList.add('hidden');
+}
+
+function extractFirebaseConfigFromSnippet() {
+  const snippet = document.getElementById('cloud-paste-snippet').value;
+  if (!snippet.trim()) {
+    alert('Silakan tempel kode snippet config Firebase terlebih dahulu.');
+    return;
+  }
+
+  const findMatch = (key) => {
+    const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'i');
+    const match = snippet.match(regex);
+    return match ? match[1].trim() : '';
+  };
+
+  const apiKey = findMatch('apiKey');
+  const authDomain = findMatch('authDomain');
+  const projectId = findMatch('projectId');
+  const storageBucket = findMatch('storageBucket');
+  const messagingSenderId = findMatch('messagingSenderId');
+  const appId = findMatch('appId');
+
+  if (!apiKey && !projectId) {
+    alert('Format snippet tidak dikenali. Pastikan menyalin blok kode: const firebaseConfig = { ... } dari Firebase Console.');
+    return;
+  }
+
+  if (apiKey) document.getElementById('cloud-api-key').value = apiKey;
+  if (authDomain) document.getElementById('cloud-auth-domain').value = authDomain;
+  if (projectId) document.getElementById('cloud-project-id').value = projectId;
+  if (storageBucket) document.getElementById('cloud-storage-bucket').value = storageBucket;
+  if (messagingSenderId) document.getElementById('cloud-messaging-sender-id').value = messagingSenderId;
+  if (appId) document.getElementById('cloud-app-id').value = appId;
+
+  showToast('Konfigurasi Firebase berhasil diekstrak!', 'success');
+}
+
+async function testCloudConnectionHandler() {
+  const btn = document.getElementById('btn-test-cloud');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Menguji...</span>`;
+
+  const config = {
+    projectId: document.getElementById('cloud-project-id').value.trim(),
+    apiKey: document.getElementById('cloud-api-key').value.trim(),
+    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
+    storageBucket: document.getElementById('cloud-storage-bucket').value.trim(),
+    messagingSenderId: document.getElementById('cloud-messaging-sender-id').value.trim(),
+    appId: document.getElementById('cloud-app-id').value.trim()
+  };
+
+  if (!config.projectId || !config.apiKey) {
+    alert('Project ID dan API Key wajib diisi untuk menguji koneksi.');
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    return;
+  }
+
+  try {
+    const res = await CloudDB.testConnection(config);
+    updateCloudStatusUI('connected', res.message);
+    showToast('Koneksi Firebase Firestore Berhasil!', 'success');
+  } catch (err) {
+    console.error('Test connection error:', err);
+    updateCloudStatusUI('error', err.message || 'Gagal terhubung ke Firebase');
+    alert('Gagal terhubung: ' + (err.message || 'Periksa kembali konfigurasi Anda.'));
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+async function saveCloudSettingsHandler(event) {
+  event.preventDefault();
+
+  const config = {
+    projectId: document.getElementById('cloud-project-id').value.trim(),
+    apiKey: document.getElementById('cloud-api-key').value.trim(),
+    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
+    storageBucket: document.getElementById('cloud-storage-bucket').value.trim(),
+    messagingSenderId: document.getElementById('cloud-messaging-sender-id').value.trim(),
+    appId: document.getElementById('cloud-app-id').value.trim(),
+    enabled: document.getElementById('cloud-toggle-enabled').checked
+  };
+
+  CloudDB.saveConfig(config);
+
+  if (config.enabled) {
+    showToast('Menghubungkan ke Cloud...');
+    await CloudDB.connect(config);
+  } else {
+    CloudDB.setStatus('disconnected', 'Cloud dinonaktifkan (Mode Lokal)');
+  }
+
+  showToast('Pengaturan Cloud berhasil disimpan!', 'success');
+  closeCloudSettingsModal();
+}
+
+async function uploadAllToCloudHandler() {
+  if (!CloudDB.firestore) {
+    alert('Cloud belum terhubung. Silakan isi konfigurasi dan pastikan koneksi berhasil terlebih dahulu.');
+    return;
+  }
+
+  if (!confirm('Apakah Anda ingin mengunggah semua produk, kategori, dan riwayat transaksi lokal ke Firebase Cloud?')) {
+    return;
+  }
+
+  const btn = document.getElementById('btn-cloud-upload');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Mengunggah...</span>`;
+
+  try {
+    const result = await CloudDB.uploadAllLocalData(DB);
+    showToast(`Berhasil upload: ${result.productsCount} produk, ${result.transactionsCount} transaksi ke Cloud!`, 'success');
+  } catch (err) {
+    console.error('Upload to cloud error:', err);
+    alert('Gagal mengunggah data: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+async function downloadAllFromCloudHandler() {
+  if (!CloudDB.firestore) {
+    alert('Cloud belum terhubung. Silakan isi konfigurasi dan pastikan koneksi berhasil terlebih dahulu.');
+    return;
+  }
+
+  if (!confirm('PERHATIAN: Mengunduh data dari Cloud akan menimpa data lokal di browser ini dengan data dari Cloud. Lanjutkan?')) {
+    return;
+  }
+
+  const btn = document.getElementById('btn-cloud-download');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Mengunduh...</span>`;
+
+  try {
+    const result = await CloudDB.downloadAllCloudData(DB);
+    await loadInitialData();
+    renderProducts();
+    if (State.activeView === 'reports') {
+      renderReports();
+    }
+    showToast(`Berhasil download: ${result.productsCount} produk, ${result.transactionsCount} transaksi!`, 'success');
+  } catch (err) {
+    console.error('Download from cloud error:', err);
+    alert('Gagal mengunduh data: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+
+// ====================================================
+// MULTI-STORE SWITCHER & PROFILE MANAGEMENT
+// ====================================================
+
+function updateStoreBrandingUI() {
+  const store = DB.getActiveStore();
+
+  const storeNameEls = [
+    document.getElementById('sidebar-store-name'),
+    document.getElementById('header-store-name')
+  ];
+  storeNameEls.forEach(el => {
+    if (el) el.innerText = store.name;
+  });
+
+  const taglineEl = document.getElementById('sidebar-store-tagline');
+  if (taglineEl) taglineEl.innerText = store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Retail Store');
+
+  const sidebarIcon = document.getElementById('sidebar-store-icon');
+  if (sidebarIcon) {
+    sidebarIcon.className = `fa-solid ${store.icon || 'fa-store'} text-lg`;
+  }
+
+  const headerIcon = document.getElementById('header-store-icon');
+  if (headerIcon) {
+    headerIcon.className = `fa-solid ${store.icon || 'fa-store'} text-amber-400`;
+  }
+
+  const iconBox = document.getElementById('sidebar-store-icon-box');
+  if (iconBox) {
+    iconBox.className = `w-10 h-10 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white shadow-glow-primary flex-shrink-0`;
+  }
+
+  // Update sempol live quick bar
+  updateSempolQuickBarUI();
+}
+
+function openStoreSwitcherModal() {
+  const modal = document.getElementById('modal-store-switcher');
+  if (!modal) return;
+  renderStoreSwitcherList();
+  modal.classList.remove('hidden');
+}
+
+function closeStoreSwitcherModal() {
+  const modal = document.getElementById('modal-store-switcher');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderStoreSwitcherList() {
+  const container = document.getElementById('stores-list-container');
+  if (!container) return;
+
+  const stores = DB.getAllStores();
+  const activeId = DB.getActiveStoreId();
+
+  let html = '';
+  stores.forEach(store => {
+    const isActive = store.id === activeId;
+    html += `
+      <div class="p-4 rounded-xl border transition-all ${
+        isActive 
+          ? 'bg-amber-500/10 border-amber-500/50 shadow-lg' 
+          : 'bg-dark-950/60 border-slate-800 hover:border-slate-700'
+      } flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5 min-w-0">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-amber-500 to-orange-600'} flex items-center justify-center text-white text-lg flex-shrink-0 shadow-md">
+            <i class="fa-solid ${store.icon || 'fa-store'}"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h4 class="font-bold text-white text-sm truncate">${store.name}</h4>
+              ${isActive ? '<span class="px-2 py-0.5 rounded-full bg-amber-500/25 text-amber-300 font-extrabold text-[10px] border border-amber-500/40">AKTIF</span>' : ''}
+            </div>
+            <p class="text-xs text-slate-400 truncate mt-0.5">${store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Retail Store')}</p>
+          </div>
+        </div>
+
+        <div class="flex-shrink-0">
+          ${isActive 
+            ? '<span class="px-3 py-1.5 bg-slate-800/80 text-slate-400 rounded-lg text-xs font-bold border border-slate-700 cursor-default">Sedang Aktif</span>' 
+            : `<button onclick="switchStoreHandler('${store.id}')" class="px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-xs font-bold transition-all shadow-glow-primary flex items-center gap-1.5">
+                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                <span>Pilih POS Ini</span>
+               </button>`
+          }
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+async function switchStoreHandler(storeId) {
+  try {
+    showToast('Memuat database profil toko...', 'info');
+    await DB.switchStore(storeId);
+    State.cart = [];
+    localStorage.removeItem('pos_cart_cache');
+    await loadInitialData();
+    switchView('cashier');
+    closeStoreSwitcherModal();
+    const activeStore = DB.getActiveStore();
+    showToast(`Berhasil berpindah ke: ${activeStore.name}!`, 'success');
+  } catch (err) {
+    console.error('Error switching store:', err);
+    alert('Gagal beralih toko: ' + err.message);
+  }
+}
+
+async function createNewStoreHandler(e) {
+  e.preventDefault();
+  const name = document.getElementById('new-store-name').value.trim();
+  const type = document.getElementById('new-store-type').value;
+  const tagline = document.getElementById('new-store-tagline').value.trim();
+
+  if (!name) return;
+
+  const icon = type === 'food' ? 'fa-utensils' : (type === 'retail' ? 'fa-shop' : 'fa-handshake');
+  const badgeColor = type === 'food' ? 'from-amber-500 to-orange-600' : 'from-indigo-500 to-purple-600';
+
+  const newStore = DB.addNewStore({
+    name,
+    type,
+    tagline,
+    icon,
+    badgeColor
+  });
+
+  document.getElementById('form-new-store').reset();
+  await switchStoreHandler(newStore.id);
+  showToast(`Toko baru "${newStore.name}" berhasil dibuat dan diaktifkan!`, 'success');
+}
+
+
+// ====================================================
+// SEMPOL STOCK & BUNDLING MANAGEMENT
+// ====================================================
+
+async function updateSempolQuickBarUI() {
+  const bar = document.getElementById('sempol-quick-bar');
+  if (!bar) return;
+
+  const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
+  if (!isSempolMode) {
+    bar.classList.add('hidden');
+    return;
+  }
+
+  bar.classList.remove('hidden');
+  const sempolProd = State.products.find(p => p.isSempol);
+  const stockCount = sempolProd ? sempolProd.stock : 0;
+  const unitCost = sempolProd ? (sempolProd.unitCost || 400) : 400;
+
+  const badge = document.getElementById('sempol-stock-count-badge');
+  if (badge) badge.innerText = `${stockCount} Tusuk`;
+
+  const costEl = document.getElementById('sempol-unit-cost-val');
+  if (costEl) costEl.innerText = unitCost.toLocaleString('id-ID');
+}
+
+async function quickAddSempolStock(amount) {
+  const current = await DB.getSempolStock();
+  const newStock = current + amount;
+  await DB.updateSempolStock(newStock);
+  await loadInitialData();
+  renderProducts();
+  showToast(`+${amount} Tusuk sempol berhasil ditambahkan! Total sekarang: ${newStock} tusuk.`, 'success');
+}
+
+function openSempolStockModal() {
+  const modal = document.getElementById('modal-sempol-stock');
+  if (!modal) return;
+  const sempolProd = State.products.find(p => p.isSempol);
+  const stock = sempolProd ? sempolProd.stock : 100;
+  const unitCost = sempolProd ? (sempolProd.unitCost || 400) : 400;
+
+  document.getElementById('input-modal-sempol-stock').value = stock;
+  document.getElementById('input-modal-sempol-cost').value = unitCost;
+  modal.classList.remove('hidden');
+}
+
+function closeSempolStockModal() {
+  const modal = document.getElementById('modal-sempol-stock');
+  if (modal) modal.classList.add('hidden');
+}
+
+function adjustSempolModalStock(amt) {
+  const input = document.getElementById('input-modal-sempol-stock');
+  input.value = Math.max(0, (Number(input.value) || 0) + amt);
+}
+
+async function saveSempolStockHandler(e) {
+  e.preventDefault();
+  const stock = Number(document.getElementById('input-modal-sempol-stock').value) || 0;
+  const unitCost = Number(document.getElementById('input-modal-sempol-cost').value) || 400;
+
+  const products = await DB.getProducts();
+  for (const p of products) {
+    if (p.isSempol) {
+      p.stock = stock;
+      p.unitCost = unitCost;
+      p.cost = (p.piecesPerUnit || 1) * unitCost;
+      await DB.saveProduct(p);
+    }
+  }
+
+  await loadInitialData();
+  renderProducts();
+  closeSempolStockModal();
+  showToast(`Stok Sempol berhasil diperbarui: ${stock} Tusuk (Modal: Rp ${unitCost}/tusuk)!`, 'success');
+}
+
 
 
 

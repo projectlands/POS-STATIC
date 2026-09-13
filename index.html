@@ -2,8 +2,8 @@
 <html lang="id" class="dark">
 <head>
   <script>
-    // Force PWA Cache Busting on Version Upgrade (4.0)
-    const APP_VERSION = '5.0';
+    // Force PWA Cache Busting on Version Upgrade (7.0)
+    const APP_VERSION = '7.0';
     if (localStorage.getItem('app_version') !== APP_VERSION) {
       localStorage.setItem('app_version', APP_VERSION);
       if ('serviceWorker' in navigator) {
@@ -159,14 +159,17 @@
   <!-- Sidebar Navigasi -->
   <aside class="hidden md:flex w-64 bg-dark-900 border-r border-slate-800 flex-col justify-between flex-shrink-0 z-20">
     <div>
-      <!-- Header / Logo -->
-      <div class="h-20 flex items-center px-6 border-b border-slate-800 gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white shadow-glow-primary">
-          <i class="fa-solid fa-cash-register text-lg"></i>
+      <!-- Header / Logo (Clickable for Store Switcher) -->
+      <div onclick="openStoreSwitcherModal()" class="h-20 flex items-center px-6 border-b border-slate-800 gap-3 cursor-pointer hover:bg-slate-800/40 transition-colors" title="Klik untuk Ganti Toko / POS">
+        <div id="sidebar-store-icon-box" class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white shadow-glow-primary flex-shrink-0">
+          <i id="sidebar-store-icon" class="fa-solid fa-cash-register text-lg"></i>
         </div>
-        <div>
-          <h1 class="font-bold text-lg text-white leading-none" id="sidebar-store-name">Ruang Temu</h1>
-          <span class="text-xs text-slate-400">Point of Sale</span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-bold text-sm md:text-base text-white leading-tight truncate" id="sidebar-store-name">Ruang Temu</h1>
+            <i class="fa-solid fa-repeat text-[10px] text-slate-400"></i>
+          </div>
+          <span class="text-[11px] text-slate-400 block truncate" id="sidebar-store-tagline">Point of Sale</span>
         </div>
       </div>
 
@@ -188,11 +191,24 @@
           <i class="fa-solid fa-gears text-lg"></i>
           <span>Pengaturan Toko</span>
         </button>
+        <button id="btn-nav-cloud" onclick="openCloudSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <i class="fa-solid fa-cloud text-lg text-sky-400"></i>
+          <span>Database Cloud</span>
+        </button>
       </nav>
     </div>
 
     <!-- Sidebar Footer -->
     <div class="p-4 border-t border-slate-800 space-y-3">
+      <!-- Status Cloud -->
+      <div class="flex items-center justify-between px-2 text-xs">
+        <span class="text-slate-400">Cloud Sync</span>
+        <button onclick="openCloudSettingsModal()" id="cloud-status-badge" class="flex items-center gap-1.5 font-medium text-slate-400 hover:text-sky-400 transition-colors" title="Klik untuk Pengaturan Cloud">
+          <span id="cloud-status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+          <span id="cloud-status-text">Lokal Saja</span>
+        </button>
+      </div>
+
       <!-- Status Connection -->
       <div class="flex items-center justify-between px-2 text-xs">
         <span class="text-slate-400">Status Sistem</span>
@@ -223,6 +239,12 @@
         <h2 id="view-title" class="text-lg md:text-xl font-bold text-white">Mesin Kasir</h2>
         <!-- Clock / Time -->
         <span id="digital-clock" class="text-xs md:text-sm font-mono text-slate-400 bg-slate-800/40 px-2 py-0.5 md:px-3 md:py-1 rounded-md border border-slate-800">20:45:00</span>
+        <!-- Store Switcher Button -->
+        <button onclick="openStoreSwitcherModal()" id="btn-header-store-switch" title="Pindah POS Toko" class="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1.5 font-bold">
+          <i id="header-store-icon" class="fa-solid fa-utensils text-amber-400"></i>
+          <span id="header-store-name" class="truncate max-w-[110px] md:max-w-[160px]">Ruang Temu</span>
+          <i class="fa-solid fa-chevron-down text-[9px] text-amber-400/80"></i>
+        </button>
         <!-- Reset Button -->
         <button onclick="resetDatabaseHandler()" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
           <i class="fa-solid fa-arrows-rotate"></i>
@@ -232,6 +254,12 @@
         <button onclick="openStoreSettingsModal()" title="Pengaturan Toko" class="bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
           <i class="fa-solid fa-gears"></i>
           <span class="hidden sm:inline">Pengaturan</span>
+        </button>
+        <!-- Cloud DB Button -->
+        <button onclick="openCloudSettingsModal()" title="Database Cloud Firebase" class="bg-slate-800/60 hover:bg-sky-600/20 hover:text-sky-400 border border-slate-700/50 hover:border-sky-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1.5">
+          <i class="fa-solid fa-cloud text-sky-400"></i>
+          <span class="hidden sm:inline font-medium">Cloud</span>
+          <span id="cloud-header-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
         </button>
       </div>
 
@@ -272,6 +300,30 @@
             <i class="fa-solid fa-camera"></i>
             <span>Scan QR</span>
           </button>
+        </div>
+
+        <!-- Sempol Live Quick Stock Bar (Visible in Sempol mode) -->
+        <div id="sempol-quick-bar" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4 flex items-center justify-between flex-wrap gap-2 flex-shrink-0 animate-[fadeIn_0.2s_ease-out]">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm flex-shrink-0">
+              <i class="fa-solid fa-utensils"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-300 font-semibold">Stok Bahan Sempol:</span>
+                <span id="sempol-stock-count-badge" class="px-2 py-0.5 rounded-full bg-amber-500/25 text-amber-300 font-extrabold text-xs border border-amber-500/40">100 Tusuk</span>
+              </div>
+              <span class="text-[11px] text-slate-400">Modal Satuan: <strong class="text-slate-200">Rp <span id="sempol-unit-cost-val">400</span></strong> / tusuk</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 ml-auto">
+            <button type="button" onclick="quickAddSempolStock(20)" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-amber-300 font-bold text-xs border border-slate-700 transition-all">+20 Tusuk</button>
+            <button type="button" onclick="quickAddSempolStock(50)" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-amber-300 font-bold text-xs border border-slate-700 transition-all">+50 Tusuk</button>
+            <button type="button" onclick="openSempolStockModal()" class="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-dark-950 font-extrabold text-xs transition-all flex items-center gap-1">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Atur Stok</span>
+            </button>
+          </div>
         </div>
 
         <!-- Categories Filter -->
@@ -416,62 +468,85 @@
     <!-- VIEW 3: REPORTS / DASHBOARD -->
     <section id="view-reports" class="hidden flex-grow p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto">
       <div class="max-w-6xl mx-auto space-y-8">
+      <div class="max-w-6xl mx-auto space-y-8">
         <!-- Filter bar -->
         <div class="flex justify-between items-center flex-wrap gap-4">
-          <h3 class="text-lg font-bold text-white">Dasbor Analitik</h3>
-          <!-- Quick date filters -->
-          <div class="flex gap-2">
-            <input type="date" id="filter-date-start" class="bg-dark-900 border border-slate-800 rounded-lg text-sm px-3 py-1.5 text-slate-200 focus:outline-none focus:border-primary-500">
-            <input type="date" id="filter-date-end" class="bg-dark-900 border border-slate-800 rounded-lg text-sm px-3 py-1.5 text-slate-200 focus:outline-none focus:border-primary-500">
-            <button onclick="loadReportData()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-semibold px-4 py-1.5 rounded-lg text-sm transition-all">
-              Filter
-            </button>
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-chart-pie text-primary-500"></i>
+              <span>Laporan Modal &amp; Keuntungan Penjualan</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">Analisis omset harian, modal bahan, dan laba bersih per hari</p>
+          </div>
+          <!-- Quick date presets & custom range -->
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800 text-xs">
+              <button onclick="setReportDatePreset('today')" id="btn-preset-today" class="px-2.5 py-1 rounded-md font-semibold text-white bg-primary-600 transition-all">Hari Ini</button>
+              <button onclick="setReportDatePreset('yesterday')" id="btn-preset-yesterday" class="px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition-all">Kemarin</button>
+              <button onclick="setReportDatePreset('7days')" id="btn-preset-7days" class="px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition-all">7 Hari</button>
+              <button onclick="setReportDatePreset('thismonth')" id="btn-preset-thismonth" class="px-2.5 py-1 rounded-md font-semibold text-slate-400 hover:text-white transition-all">Bulan Ini</button>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input type="date" id="filter-date-start" class="bg-dark-900 border border-slate-800 rounded-lg text-xs px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-primary-500">
+              <span class="text-xs text-slate-500">-</span>
+              <input type="date" id="filter-date-end" class="bg-dark-900 border border-slate-800 rounded-lg text-xs px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-primary-500">
+              <button onclick="loadReportData()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-semibold px-3 py-1.5 rounded-lg text-xs transition-all">
+                Filter
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- Metric widgets Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <!-- Widget 1: Revenue -->
+          <!-- Widget 1: Revenue (Omset) -->
           <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
             <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Pendapatan</span>
-              <h4 id="report-stat-revenue" class="text-xl font-bold text-white">Rp 0</h4>
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Pendapatan (Omset)</span>
+              <h4 id="report-stat-revenue" class="text-xl font-extrabold text-white">Rp 0</h4>
+              <span class="text-[11px] text-slate-500">Pemasukan kotor</span>
             </div>
             <div class="w-12 h-12 rounded-xl bg-primary-600/10 text-primary-500 flex items-center justify-center text-xl">
               <i class="fa-solid fa-rupiah-sign"></i>
             </div>
           </div>
 
-          <!-- Widget 2: Net Profit -->
+          <!-- Widget 2: Total Modal (HPP) -->
           <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
             <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Laba Bersih</span>
-              <h4 id="report-stat-profit" class="text-xl font-bold text-success-500">Rp 0</h4>
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Modal (HPP)</span>
+              <h4 id="report-stat-cost" class="text-xl font-extrabold text-rose-400">Rp 0</h4>
+              <span class="text-[11px] text-slate-500">Modal bahan baku</span>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-rose-600/10 text-rose-400 flex items-center justify-center text-xl">
+              <i class="fa-solid fa-coins"></i>
+            </div>
+          </div>
+
+          <!-- Widget 3: Keuntungan Bersih (Untung) -->
+          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Untung Bersih</span>
+                <span id="report-stat-margin" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">0%</span>
+              </div>
+              <h4 id="report-stat-profit" class="text-xl font-extrabold text-success-500">Rp 0</h4>
+              <span class="text-[11px] text-slate-500">Omset dikurangi modal</span>
             </div>
             <div class="w-12 h-12 rounded-xl bg-success-600/10 text-success-500 flex items-center justify-center text-xl">
-              <i class="fa-solid fa-chart-line-up"></i>
+              <i class="fa-solid fa-hand-holding-dollar"></i>
             </div>
           </div>
 
-          <!-- Widget 3: Sales Count -->
+          <!-- Widget 4: Total Tusuk Terjual & Transaksi -->
           <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
             <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Transaksi</span>
-              <h4 id="report-stat-count" class="text-xl font-bold text-white">0</h4>
-            </div>
-            <div class="w-12 h-12 rounded-xl bg-indigo-600/10 text-indigo-400 flex items-center justify-center text-xl">
-              <i class="fa-solid fa-receipt"></i>
-            </div>
-          </div>
-
-          <!-- Widget 4: Avg Bill -->
-          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-            <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rata-rata Nota</span>
-              <h4 id="report-stat-avg" class="text-xl font-bold text-white">Rp 0</h4>
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider" id="report-stat-volume-label">Total Terjual</span>
+              <h4 id="report-stat-volume" class="text-xl font-extrabold text-amber-400">0 Tusuk</h4>
+              <span class="text-[11px] text-slate-500"><span id="report-stat-count">0</span> transaksi</span>
             </div>
             <div class="w-12 h-12 rounded-xl bg-amber-600/10 text-amber-500 flex items-center justify-center text-xl">
-              <i class="fa-solid fa-wallet"></i>
+              <i class="fa-solid fa-utensils" id="report-stat-volume-icon"></i>
             </div>
           </div>
         </div>
@@ -482,7 +557,7 @@
           <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 lg:col-span-2 space-y-4">
             <div class="flex justify-between items-center">
               <h4 class="font-bold text-white text-sm">Grafik Penjualan Harian</h4>
-              <span class="text-xs text-slate-400">7 Hari Terakhir</span>
+              <span class="text-xs text-slate-400">Tren Pendapatan</span>
             </div>
             <!-- Canvas for Simple Chart rendering -->
             <div class="relative h-64 w-full">
@@ -492,7 +567,7 @@
 
           <!-- Top Selling Products Card -->
           <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-            <h4 class="font-bold text-white text-sm">Produk Terlaris</h4>
+            <h4 class="font-bold text-white text-sm">Menu / Produk Terlaris</h4>
             <div id="top-products-list" class="space-y-3.5">
               <!-- Dynamically Rendered Top Selling Products -->
             </div>
@@ -501,8 +576,9 @@
 
         <!-- History of Transactions Table -->
         <div class="bg-dark-900 border border-slate-800 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-slate-800">
+          <div class="p-5 border-b border-slate-800 flex justify-between items-center">
             <h4 class="font-bold text-white text-sm">Riwayat Transaksi Terkini</h4>
+            <span class="text-xs text-slate-400">Detail Omset, Modal, dan Laba</span>
           </div>
           <!-- Desktop View Table -->
           <div class="hidden md:block overflow-x-auto">
@@ -510,10 +586,12 @@
               <thead>
                 <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase bg-slate-900/30">
                   <th class="p-4 pl-6">ID Transaksi</th>
-                  <th class="p-4">Tanggal & Waktu</th>
-                  <th class="p-4">Metode Bayar</th>
-                  <th class="p-4 text-right">Pajak/Diskon</th>
-                  <th class="p-4 text-right">Total Transaksi</th>
+                  <th class="p-4">Tanggal &amp; Waktu</th>
+                  <th class="p-4">Item &amp; Tusukan</th>
+                  <th class="p-4 text-center">Metode</th>
+                  <th class="p-4 text-right">Total Omset</th>
+                  <th class="p-4 text-right">Total Modal</th>
+                  <th class="p-4 text-right font-bold text-emerald-400">Untung Bersih</th>
                   <th class="p-4 text-right pr-6">Detail</th>
                 </tr>
               </thead>
@@ -576,9 +654,36 @@
             <input type="number" id="product-price" min="0" required class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Stok Awal</label>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Stok Satuan</label>
             <input type="number" id="product-stock" min="0" step="1" required class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200">
           </div>
+        </div>
+
+        <!-- Khusus Paket Tusukan / Bundling (Sempol & Kaki Lima) -->
+        <div class="p-3.5 bg-slate-950/70 border border-amber-500/30 rounded-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-utensils"></i>
+              <span>Fitur Khusus Tusukan / Paket Sempol</span>
+            </span>
+            <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+              <input type="checkbox" id="product-is-sempol" class="rounded bg-dark-900 border-slate-700 text-amber-500 focus:ring-0" onchange="toggleSempolFields()">
+              <span>Menu Tusukan Sempol</span>
+            </label>
+          </div>
+          <div id="sempol-product-fields" class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Isi Tusuk per Porsi/Paket</label>
+              <input type="number" id="product-pieces" min="1" value="1" class="w-full px-3 py-2 rounded-lg bg-dark-900 border border-slate-800 focus:outline-none focus:border-amber-500 text-xs text-white" placeholder="Contoh: 6 untuk paket 10rb" oninput="calculateProductCostFromUnit()">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Modal per 1 Tusuk (Rp)</label>
+              <input type="number" id="product-unit-cost" min="0" value="400" class="w-full px-3 py-2 rounded-lg bg-dark-900 border border-slate-800 focus:outline-none focus:border-amber-500 text-xs text-white" placeholder="Contoh: 400" oninput="calculateProductCostFromUnit()">
+            </div>
+          </div>
+          <p class="text-[10px] text-slate-400 leading-normal" id="sempol-calc-hint">
+            💡 <em>Modal otomatis dihitung: Isi Tusuk × Modal 1 Tusuk (misal: 6 × Rp 400 = Rp 2.400). Saat dibeli, stok bahan tusuk akan berkurang otomatis sesuai isi tusuknya.</em>
+          </p>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -596,14 +701,16 @@
           <div>
             <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ikon</label>
             <select id="product-icon" class="w-full px-4 py-2.5 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200">
+              <option value="fa-utensils">Sempol / Makanan</option>
+              <option value="fa-fire">Pedas / Gorengan</option>
+              <option value="fa-glass-water">Minuman / Es Teh</option>
+              <option value="fa-bottle-water">Air Mineral</option>
+              <option value="fa-pepper-hot">Saus / Sambal</option>
               <option value="fa-mobile-screen-button">Smartphone / Gadget</option>
               <option value="fa-laptop">Laptop / Komputer</option>
               <option value="fa-headphones">Headphone / Audio</option>
               <option value="fa-plug">Aksesoris / Charger</option>
               <option value="fa-stopwatch">Smartwatch / Wearable</option>
-              <option value="fa-keyboard">Peripheral / Keyboard</option>
-              <option value="fa-gamepad">Console / Gaming</option>
-              <option value="fa-camera">Kamera / Optik</option>
               <option value="fa-tag">Lainnya / Umum</option>
             </select>
           </div>
@@ -688,6 +795,272 @@
         <div class="pt-4 border-t border-slate-800 flex justify-end gap-3">
           <button type="button" onclick="closeStoreSettingsModal()" class="px-5 py-2.5 border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-sm transition-colors">Batal</button>
           <button type="submit" class="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-glow-primary">Simpan Pengaturan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CLOUD DATABASE SETTINGS (FIREBASE) -->
+  <div id="modal-cloud-settings" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-[fadeIn_0.2s_ease-out]">
+      <!-- Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-dark-950/60">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+            <i class="fa-solid fa-cloud text-lg"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-white text-base md:text-lg flex items-center gap-2">
+              <span>Database Cloud Firebase</span>
+              <span id="cloud-modal-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Lokal Saja</span>
+            </h3>
+            <p class="text-xs text-slate-400">Sinkronisasi data online gratis via Firebase Firestore</p>
+          </div>
+        </div>
+        <button onclick="closeCloudSettingsModal()" class="text-slate-400 hover:text-white transition-colors p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-6 overflow-y-auto space-y-5 text-sm">
+
+        <!-- Status Message Banner -->
+        <div id="cloud-status-alert" class="p-3.5 rounded-xl border border-slate-800 bg-slate-950/60 flex items-start gap-3">
+          <i id="cloud-status-alert-icon" class="fa-solid fa-circle-info text-sky-400 mt-0.5 text-base"></i>
+          <div class="flex-1 text-xs">
+            <div id="cloud-status-alert-title" class="font-bold text-slate-200">Status Sinkronisasi</div>
+            <div id="cloud-status-alert-desc" class="text-slate-400 mt-0.5">Firebase belum dikonfigurasi. Ikuti panduan di bawah untuk menghubungkan akun Firebase gratis.</div>
+          </div>
+        </div>
+
+        <!-- Panduan Singkat Collapsible -->
+        <details class="group bg-slate-950/40 border border-slate-800/80 rounded-xl overflow-hidden">
+          <summary class="cursor-pointer px-4 py-3 text-xs font-semibold text-sky-400 flex items-center justify-between hover:bg-slate-800/30 transition-colors">
+            <span class="flex items-center gap-2">
+              <i class="fa-solid fa-book-open"></i>
+              <span>Cara Mendapatkan Firebase Config Gratis (Klik untuk lihat)</span>
+            </span>
+            <i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i>
+          </summary>
+          <div class="px-4 pb-4 pt-1 text-xs text-slate-300 space-y-2 border-t border-slate-800/50">
+            <p>1. Buka <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" class="text-sky-400 underline font-semibold">Firebase Console <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a> (masuk dengan akun Google Anda).</p>
+            <p>2. Buat Project baru (misal: <strong class="text-white">POS-Static</strong>), klik Lanjut.</p>
+            <p>3. Di menu kiri, pilih <strong class="text-white">Build &gt; Firestore Database</strong>, klik <strong class="text-white">Create Database</strong>. Pilih lokasi terdekat (misal Jakarta / Singapore), dan pilih mode <strong class="text-amber-400">Start in test mode</strong>.</p>
+            <p>4. Buka Project Overview &gt; klik ikon Web <strong class="text-white">&lt;/&gt;</strong> untuk daftarkan Web App.</p>
+            <p>5. Salin blok kode <code class="bg-slate-900 px-1 py-0.5 rounded text-sky-300">firebaseConfig = { ... }</code> lalu tempel ke kotak di bawah untuk ekstrak otomatis!</p>
+          </div>
+        </details>
+
+        <!-- Quick Paste Snippet Area -->
+        <div class="bg-slate-950/70 border border-slate-800 p-4 rounded-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-paste text-sky-400"></i>
+              <span>Tempel Snippet Firebase Config Di Sini</span>
+            </label>
+            <span class="text-[11px] text-slate-500">Auto-Extract Otomatis</span>
+          </div>
+          <textarea id="cloud-paste-snippet" rows="3" placeholder="Contoh: paste seluruh kode 'const firebaseConfig = { apiKey: &quot;...&quot;, ... }' dari Firebase Console" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-900 border border-slate-800 focus:outline-none focus:border-sky-500 text-xs font-mono text-slate-200 resize-none placeholder-slate-600"></textarea>
+          <button type="button" onclick="extractFirebaseConfigFromSnippet()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-white font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-700">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>Ekstrak &amp; Isi Formulir Otomatis</span>
+          </button>
+        </div>
+
+        <!-- Form Manual Fields -->
+        <form id="form-cloud-settings" onsubmit="saveCloudSettingsHandler(event)" class="space-y-4">
+          <!-- Toggle Cloud Sync -->
+          <div class="flex items-center justify-between p-3.5 bg-slate-950/50 border border-slate-800 rounded-xl">
+            <div>
+              <span class="block text-xs font-bold text-white">Aktifkan Cloud Sync Otomatis</span>
+              <span class="text-[11px] text-slate-400">Transaksi &amp; produk otomatis disinkronkan ke Firebase</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="cloud-toggle-enabled" class="sr-only peer" checked>
+              <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Project ID *</label>
+              <input type="text" id="cloud-project-id" placeholder="pos-static-12345" required class="w-full px-3.5 py-2 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-sky-500 text-slate-200 text-xs font-mono">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">API Key *</label>
+              <input type="text" id="cloud-api-key" placeholder="AIzaSy..." required class="w-full px-3.5 py-2 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-sky-500 text-slate-200 text-xs font-mono">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Auth Domain</label>
+              <input type="text" id="cloud-auth-domain" placeholder="project-id.firebaseapp.com" class="w-full px-3.5 py-2 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-sky-500 text-slate-200 text-xs font-mono">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Storage Bucket</label>
+              <input type="text" id="cloud-storage-bucket" placeholder="project-id.appspot.com" class="w-full px-3.5 py-2 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-sky-500 text-slate-200 text-xs font-mono">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Messaging Sender ID</label>
+              <input type="text" id="cloud-messaging-sender-id" placeholder="1029384756" class="w-full px-3.5 py-2 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-sky-500 text-slate-200 text-xs font-mono">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">App ID</label>
+              <input type="text" id="cloud-app-id" placeholder="1:1029384756:web:abcd" class="w-full px-3.5 py-2 rounded-lg bg-dark-950 border border-slate-800 focus:outline-none focus:border-sky-500 text-slate-200 text-xs font-mono">
+            </div>
+          </div>
+
+          <!-- Manual Bulk Sync Tools -->
+          <div class="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
+            <span class="block text-xs font-bold text-slate-300 uppercase tracking-wider">Sinkronisasi Manual (Bulk Sync)</span>
+            <p class="text-[11px] text-slate-400">Gunakan tombol di bawah untuk mengunggah data lokal awal ke Cloud atau mengunduh data dari Cloud ke perangkat ini.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+              <button type="button" onclick="uploadAllToCloudHandler()" id="btn-cloud-upload" class="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-sky-400 border border-sky-500/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+                <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                <span>Upload Data Lokal ke Cloud</span>
+              </button>
+              <button type="button" onclick="downloadAllFromCloudHandler()" id="btn-cloud-download" class="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+                <i class="fa-solid fa-cloud-arrow-down text-sm"></i>
+                <span>Download dari Cloud ke Lokal</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Footer Buttons -->
+          <div class="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <button type="button" onclick="testCloudConnectionHandler()" id="btn-test-cloud" class="px-4 py-2.5 border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 font-semibold rounded-lg text-xs transition-colors flex items-center gap-2">
+              <i class="fa-solid fa-bolt"></i>
+              <span>Test Koneksi</span>
+            </button>
+
+            <div class="flex items-center gap-2 ml-auto">
+              <button type="button" onclick="closeCloudSettingsModal()" class="px-4 py-2.5 border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-xs transition-colors">Tutup</button>
+              <button type="submit" class="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg text-xs transition-colors shadow-glow-primary flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>Simpan Konfigurasi</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+  <!-- MODAL: STORE SWITCHER (PINDAH POS TOKO) -->
+  <div id="modal-store-switcher" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-[fadeIn_0.2s_ease-out]">
+      <!-- Header -->
+      <div class="px-6 py-5 border-b border-slate-800 flex justify-between items-center bg-dark-950/60">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <i class="fa-solid fa-store text-lg"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-white text-base md:text-lg">Pindah POS / Profil Toko</h3>
+            <p class="text-xs text-slate-400">Pilih profil penjualan yang ingin Anda gunakan saat ini</p>
+          </div>
+        </div>
+        <button onclick="closeStoreSwitcherModal()" class="text-slate-400 hover:text-white transition-colors p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Body -->
+      <div class="p-6 overflow-y-auto space-y-5">
+        <!-- Active & Available Stores List -->
+        <div class="space-y-3" id="stores-list-container">
+          <!-- Dynamically Rendered by renderStoreSwitcherList() -->
+        </div>
+
+        <!-- Create New Store Profile Accordion -->
+        <details class="group bg-slate-950/50 border border-slate-800 rounded-xl overflow-hidden">
+          <summary class="cursor-pointer px-4 py-3 text-xs font-semibold text-primary-400 flex items-center justify-between hover:bg-slate-800/30 transition-colors">
+            <span class="flex items-center gap-2">
+              <i class="fa-solid fa-plus-circle"></i>
+              <span>Buat Profil POS / Toko Baru</span>
+            </span>
+            <i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i>
+          </summary>
+          <form id="form-new-store" onsubmit="createNewStoreHandler(event)" class="p-4 border-t border-slate-800/60 space-y-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Nama Toko / Usaha *</label>
+              <input type="text" id="new-store-name" required placeholder="Contoh: Kopi Temu Rasa, Martabak Bangka" class="w-full px-3.5 py-2 rounded-lg bg-dark-900 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-xs">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Jenis Usaha</label>
+                <select id="new-store-type" class="w-full px-3.5 py-2 rounded-lg bg-dark-900 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-xs">
+                  <option value="food">Makanan / Minuman / Kaki Lima</option>
+                  <option value="retail">Retail / Toko / Gadget</option>
+                  <option value="service">Jasa / Layanan</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Keterangan / Tagline</label>
+                <input type="text" id="new-store-tagline" placeholder="Gerobak / Cabang 1" class="w-full px-3.5 py-2 rounded-lg bg-dark-900 border border-slate-800 focus:outline-none focus:border-primary-500 text-slate-200 text-xs">
+              </div>
+            </div>
+            <button type="submit" class="w-full py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-xs transition-colors shadow-glow-primary flex items-center justify-center gap-2">
+              <i class="fa-solid fa-check"></i>
+              <span>Simpan &amp; Tambah Toko</span>
+            </button>
+          </form>
+        </details>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 bg-slate-900/60 border-t border-slate-800 flex justify-end">
+        <button onclick="closeStoreSwitcherModal()" class="px-5 py-2 border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-xs transition-colors">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SETTING STOK SEMPOL (SHARED INVENTORY) -->
+  <div id="modal-sempol-stock" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-[fadeIn_0.2s_ease-out]">
+      <!-- Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-dark-950/60">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <i class="fa-solid fa-utensils"></i>
+          </div>
+          <h4 class="font-bold text-white text-base">Kelola Stok Sempol</h4>
+        </div>
+        <button onclick="closeSempolStockModal()" class="text-slate-400 hover:text-white transition-colors p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Body Form -->
+      <form id="form-sempol-stock" onsubmit="saveSempolStockHandler(event)" class="p-6 space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Sisa Stok Sempol Siap Jual (Tusuk)</label>
+          <div class="relative">
+            <input type="number" id="input-modal-sempol-stock" min="0" required class="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-slate-800 focus:outline-none focus:border-amber-500 text-lg font-bold text-amber-400 placeholder-slate-600">
+            <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 font-semibold">Tusuk</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Modal per 1 Tusuk (Rp)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500 font-bold">Rp</span>
+            <input type="number" id="input-modal-sempol-cost" min="0" required class="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-dark-950 border border-slate-800 focus:outline-none focus:border-amber-500 text-sm font-bold text-white placeholder-slate-600">
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-1">
+          <span class="block text-slate-400 font-semibold">Tambah Cepat Stok:</span>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="adjustSempolModalStock(20)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-lg border border-slate-700 transition-all">+20</button>
+            <button type="button" onclick="adjustSempolModalStock(50)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-lg border border-slate-700 transition-all">+50</button>
+            <button type="button" onclick="adjustSempolModalStock(100)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-lg border border-slate-700 transition-all">+100</button>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200/90 leading-relaxed">
+          💡 <em>Stok dan modal ini berlaku untuk semua paket menu sempol. Ketika terjual, sisa tusuk akan otomatis berkurang sesuai isi porsinya.</em>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
+          <button type="button" onclick="closeSempolStockModal()" class="px-4 py-2 border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-xs transition-colors">Batal</button>
+          <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-dark-950 font-bold rounded-lg text-xs transition-colors">Simpan Stok</button>
         </div>
       </form>
     </div>
@@ -827,6 +1200,11 @@
 
   <!-- Root Print Area (Hidden on screen, visible on print) -->
   <div id="print-area" class="hidden"></div>
+
+  <!-- Firebase SDK (Compat Mode via CDN) & Cloud DB Module -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./cloud-db.js"></script>
 
   <!-- App Core JS and Logic -->
   <script src="./db.js"></script>

@@ -1,9 +1,10 @@
-const CACHE_NAME = 'pos-pwa-v7';
+const CACHE_NAME = 'pos-pwa-v9';
 const ASSETS = [
   './',
   './index.html',
   './app.js',
   './db.js',
+  './cloud-db.js',
   './manifest.json',
   './icon.svg',
   // CDN files for offline capability
