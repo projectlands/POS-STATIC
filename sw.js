@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-pwa-v9';
+const CACHE_NAME = 'pos-pwa-v10';
 const ASSETS = [
   './',
   './index.html',

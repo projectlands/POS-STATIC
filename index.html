@@ -2,8 +2,8 @@
 <html lang="id" class="dark">
 <head>
   <script>
-    // Force PWA Cache Busting on Version Upgrade (7.0)
-    const APP_VERSION = '7.0';
+    // Force PWA Cache Busting on Version Upgrade (8.0)
+    const APP_VERSION = '8.0';
     if (localStorage.getItem('app_version') !== APP_VERSION) {
       localStorage.setItem('app_version', APP_VERSION);
       if ('serviceWorker' in navigator) {
@@ -102,6 +102,14 @@
 
     body {
       -webkit-tap-highlight-color: transparent;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .animate-slide-up {
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
     /* Print Struk styling */
@@ -234,43 +242,56 @@
   <main class="flex-grow flex flex-col min-w-0 overflow-hidden bg-dark-950 pb-16 md:pb-0">
 
     <!-- Top Bar -->
-    <header class="h-16 md:h-20 bg-dark-900 border-b border-slate-800 flex items-center justify-between px-4 md:px-8 flex-shrink-0 z-10">
-      <div class="flex items-center gap-3 md:gap-4">
-        <h2 id="view-title" class="text-lg md:text-xl font-bold text-white">Mesin Kasir</h2>
-        <!-- Clock / Time -->
-        <span id="digital-clock" class="text-xs md:text-sm font-mono text-slate-400 bg-slate-800/40 px-2 py-0.5 md:px-3 md:py-1 rounded-md border border-slate-800">20:45:00</span>
-        <!-- Store Switcher Button -->
-        <button onclick="openStoreSwitcherModal()" id="btn-header-store-switch" title="Pindah POS Toko" class="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1.5 font-bold">
-          <i id="header-store-icon" class="fa-solid fa-utensils text-amber-400"></i>
-          <span id="header-store-name" class="truncate max-w-[110px] md:max-w-[160px]">Ruang Temu</span>
+    <header class="h-16 md:h-20 bg-dark-900 border-b border-slate-800 flex items-center justify-between px-3 md:px-8 flex-shrink-0 z-10">
+      <div class="flex items-center gap-2 md:gap-4 min-w-0">
+        <!-- View Title -->
+        <h2 id="view-title" class="text-base md:text-xl font-bold text-white truncate max-w-[110px] sm:max-w-none">Mesin Kasir</h2>
+        
+        <!-- Store Switcher Button (Prominent on both Mobile & Desktop) -->
+        <button onclick="openStoreSwitcherModal()" id="btn-header-store-switch" title="Pindah POS Toko" class="bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 px-2.5 py-1 rounded-lg transition-all text-xs flex items-center gap-1.5 font-bold flex-shrink-0">
+          <i id="header-store-icon" class="fa-solid fa-utensils text-amber-400 text-xs"></i>
+          <span id="header-store-name" class="truncate max-w-[90px] sm:max-w-[160px]">Ruang Temu</span>
           <i class="fa-solid fa-chevron-down text-[9px] text-amber-400/80"></i>
         </button>
-        <!-- Reset Button -->
-        <button onclick="resetDatabaseHandler()" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+
+        <!-- Clock / Time (Desktop only) -->
+        <span id="digital-clock" class="hidden lg:inline-block text-xs md:text-sm font-mono text-slate-400 bg-slate-800/40 px-2 py-0.5 md:px-3 md:py-1 rounded-md border border-slate-800">20:45:00</span>
+
+        <!-- Reset Button (Desktop only) -->
+        <button onclick="resetDatabaseHandler()" title="Reset ke Data Sampel" class="hidden md:flex bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 px-2.5 py-1 rounded-md transition-all text-xs items-center gap-1">
           <i class="fa-solid fa-arrows-rotate"></i>
-          <span class="hidden sm:inline">Reset Sampel</span>
+          <span>Reset Sampel</span>
         </button>
-        <!-- Settings Button -->
-        <button onclick="openStoreSettingsModal()" title="Pengaturan Toko" class="bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+
+        <!-- Settings Button (Desktop only) -->
+        <button onclick="openStoreSettingsModal()" title="Pengaturan Toko" class="hidden md:flex bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 px-2.5 py-1 rounded-md transition-all text-xs items-center gap-1">
           <i class="fa-solid fa-gears"></i>
-          <span class="hidden sm:inline">Pengaturan</span>
-        </button>
-        <!-- Cloud DB Button -->
-        <button onclick="openCloudSettingsModal()" title="Database Cloud Firebase" class="bg-slate-800/60 hover:bg-sky-600/20 hover:text-sky-400 border border-slate-700/50 hover:border-sky-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1.5">
-          <i class="fa-solid fa-cloud text-sky-400"></i>
-          <span class="hidden sm:inline font-medium">Cloud</span>
-          <span id="cloud-header-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+          <span>Pengaturan</span>
         </button>
       </div>
 
-      <!-- Quick Scan Info & Scanner gun indicator -->
-      <div class="flex items-center gap-4">
-        <div class="hidden md:flex items-center gap-2 bg-slate-800/40 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-400">
+      <!-- Right Action Items -->
+      <div class="flex items-center gap-2 md:gap-4 flex-shrink-0">
+        <!-- Cloud DB Button (Visible on both Mobile & Desktop) -->
+        <button onclick="openCloudSettingsModal()" id="btn-header-cloud" title="Database Cloud Firebase" class="bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 px-2.5 py-1 rounded-lg transition-all text-xs flex items-center gap-1.5 font-semibold">
+          <i class="fa-solid fa-cloud text-sky-400 text-xs"></i>
+          <span class="hidden sm:inline">Cloud</span>
+          <span id="cloud-header-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+        </button>
+
+        <!-- Mobile Menu Trigger Button (Mobile Only) -->
+        <button onclick="openMobileMenuModal()" class="md:hidden flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/70 transition-colors" title="Buka Menu Lengkap">
+          <i class="fa-solid fa-bars text-sm"></i>
+        </button>
+
+        <!-- Quick Scan Info & Scanner gun indicator (Desktop) -->
+        <div class="hidden lg:flex items-center gap-2 bg-slate-800/40 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-400">
           <i class="fa-solid fa-barcode text-sm text-primary-500"></i>
-          <span>Scanner Gun: <strong class="text-success-500 font-normal">Aktif</strong> (Langsung scan)</span>
+          <span>Scanner Gun: <strong class="text-success-500 font-normal">Aktif</strong></span>
         </div>
-        <!-- Profile / Info -->
-        <div class="flex items-center gap-3">
+
+        <!-- Profile / Info (Desktop) -->
+        <div class="hidden md:flex items-center gap-3">
           <div class="text-right hidden sm:block">
             <div class="font-semibold text-sm text-white">Kasir Utama</div>
             <div class="text-xs text-primary-500">Administrator</div>
@@ -1177,25 +1198,151 @@
   </div>
 
   <!-- Bottom Navigation Bar (Mobile Only) -->
-  <div class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-dark-900 border-t border-slate-800 flex justify-around items-center z-30 pb-safe">
-    <button onclick="switchView('cashier')" id="btn-m-nav-cashier" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+  <div class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-dark-900 border-t border-slate-800 flex justify-around items-center z-30 pb-safe px-1">
+    <button onclick="switchView('cashier')" id="btn-m-nav-cashier" class="flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative">
       <i class="fa-solid fa-cash-register text-base"></i>
-      <span class="text-[9px] mt-1 font-semibold">Kasir</span>
+      <span class="text-[9px] mt-1">Kasir</span>
     </button>
-    <button onclick="switchView('cart')" id="btn-m-nav-cart" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+    <button onclick="switchView('cart')" id="btn-m-nav-cart" class="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 relative">
       <i class="fa-solid fa-shopping-basket text-base"></i>
       <span class="text-[9px] mt-1 font-semibold">Keranjang</span>
       <!-- Cart Badge -->
-      <span id="cart-badge" class="hidden absolute top-0.5 right-2 bg-danger-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-dark-900">0</span>
+      <span id="cart-badge" class="hidden absolute top-0.5 right-3 bg-danger-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-dark-900">0</span>
     </button>
-    <button onclick="switchView('products')" id="btn-m-nav-products" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+    <button onclick="switchView('products')" id="btn-m-nav-products" class="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 relative">
       <i class="fa-solid fa-box text-base"></i>
       <span class="text-[9px] mt-1 font-semibold">Produk</span>
     </button>
-    <button onclick="switchView('reports')" id="btn-m-nav-reports" class="flex flex-col items-center justify-center w-16 text-slate-400 relative">
+    <button onclick="switchView('reports')" id="btn-m-nav-reports" class="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 relative">
       <i class="fa-solid fa-chart-line text-base"></i>
       <span class="text-[9px] mt-1 font-semibold">Laporan</span>
     </button>
+    <button onclick="openMobileMenuModal()" id="btn-m-nav-menu" class="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 hover:text-white transition-colors relative">
+      <div class="relative">
+        <i class="fa-solid fa-bars-staggered text-base"></i>
+        <!-- Ping dot for cloud / new features -->
+        <span id="m-nav-menu-dot" class="w-2 h-2 rounded-full bg-sky-400 absolute -top-0.5 -right-1.5"></span>
+      </div>
+      <span class="text-[9px] mt-1 font-semibold">Menu</span>
+    </button>
+  </div>
+
+  <!-- MODAL: MOBILE MENU / LAINNYA (MOBILE ONLY QUICK DRAWER) -->
+  <div id="modal-mobile-menu" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end md:hidden animate-[fadeIn_0.15s_ease-out]">
+    <!-- Backdrop Click to Close -->
+    <div onclick="closeMobileMenuModal()" class="flex-grow"></div>
+
+    <div class="bg-dark-900 border-t border-slate-800 rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-slide-up">
+      <!-- Pull handle & Header -->
+      <div class="pt-3 pb-4 px-6 border-b border-slate-800/80 bg-dark-950/60 flex-shrink-0">
+        <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto mb-3"></div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3 min-w-0">
+            <div id="m-menu-store-icon-box" class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white shadow-glow-primary flex-shrink-0">
+              <i id="m-menu-store-icon" class="fa-solid fa-cash-register text-base"></i>
+            </div>
+            <div class="min-w-0">
+              <h3 id="m-menu-store-name" class="font-bold text-white text-base truncate">Ruang Temu</h3>
+              <p id="m-menu-store-tagline" class="text-xs text-slate-400 truncate">Point of Sale</p>
+            </div>
+          </div>
+          <button onclick="closeMobileMenuModal()" class="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body / Menu Items Grid -->
+      <div class="p-4 overflow-y-auto space-y-2.5">
+        <!-- Fitur Baru: Database Cloud Firebase -->
+        <div onclick="closeMobileMenuModal(); openCloudSettingsModal();" class="p-3.5 rounded-2xl bg-sky-950/30 hover:bg-sky-950/50 border border-sky-500/40 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400 flex-shrink-0">
+              <i class="fa-solid fa-cloud text-xl"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-sm text-white">Database Cloud</span>
+                <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-sky-500/30 text-sky-300 border border-sky-500/40">Baru</span>
+              </div>
+              <p class="text-xs text-slate-400 truncate mt-0.5">Sinkronisasi data online Firestore</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span id="m-menu-cloud-status" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Lokal Saja</span>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+          </div>
+        </div>
+
+        <!-- Fitur: Pengaturan Toko & Struk -->
+        <div onclick="closeMobileMenuModal(); openStoreSettingsModal();" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-primary-500/20 border border-primary-500/40 flex items-center justify-center text-primary-400 flex-shrink-0">
+              <i class="fa-solid fa-gears text-xl"></i>
+            </div>
+            <div class="min-w-0">
+              <span class="font-bold text-sm text-white">Pengaturan Toko</span>
+              <p class="text-xs text-slate-400 truncate mt-0.5">Nama, alamat, PPN & format struk thermal</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+        </div>
+
+        <!-- Fitur: Ganti Toko / Multi-Store -->
+        <div onclick="closeMobileMenuModal(); openStoreSwitcherModal();" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
+              <i class="fa-solid fa-store text-xl"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-sm text-white">Pindah POS / Toko</span>
+                <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">Multi-Toko</span>
+              </div>
+              <p class="text-xs text-slate-400 truncate mt-0.5">Ganti profil Cafe, Retail, atau Sempol</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+        </div>
+
+        <!-- Fitur: Pasang Aplikasi PWA -->
+        <div id="btn-m-menu-install" onclick="triggerPWAInstall()" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0">
+              <i class="fa-solid fa-download text-xl"></i>
+            </div>
+            <div class="min-w-0">
+              <span class="font-bold text-sm text-white">Pasang Aplikasi (PWA)</span>
+              <p class="text-xs text-slate-400 truncate mt-0.5">Tambahkan ke layar utama HP (Offline)</p>
+            </div>
+          </div>
+          <span id="m-menu-install-badge" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Install</span>
+        </div>
+
+        <!-- Fitur: Reset Data Sampel -->
+        <div onclick="closeMobileMenuModal(); resetDatabaseHandler();" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 flex-shrink-0">
+              <i class="fa-solid fa-arrows-rotate text-xl"></i>
+            </div>
+            <div class="min-w-0">
+              <span class="font-bold text-sm text-white">Reset Sampel Toko</span>
+              <p class="text-xs text-slate-400 truncate mt-0.5">Muat ulang data contoh katalog & transaksi</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+        </div>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="p-4 border-t border-slate-800/80 bg-dark-950/80 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-success-500 animate-pulse"></span>
+          POS Online
+        </span>
+        <span>Versi 8.0 • Ruang Temu PWA</span>
+      </div>
+    </div>
   </div>
 
   <!-- Root Print Area (Hidden on screen, visible on print) -->

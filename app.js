@@ -68,29 +68,53 @@ function registerServiceWorker() {
   }
 
   // Handle PWA Install prompt
-  let deferredPrompt;
   const installBtn = document.getElementById('btn-install-pwa');
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    installBtn.classList.remove('hidden');
-  });
-
-  installBtn.addEventListener('click', async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to install prompt: ${outcome}`);
-      deferredPrompt = null;
-      installBtn.classList.add('hidden');
+    if (installBtn) installBtn.classList.remove('hidden');
+    const mInstallBadge = document.getElementById('m-menu-install-badge');
+    if (mInstallBadge) {
+      mInstallBadge.innerText = 'Tersedia';
+      mInstallBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse';
     }
   });
 
+  if (installBtn) {
+    installBtn.addEventListener('click', triggerPWAInstall);
+  }
+
   window.addEventListener('appinstalled', () => {
     console.log('POS App installed to homescreen!');
-    installBtn.classList.add('hidden');
+    if (installBtn) installBtn.classList.add('hidden');
+    const mInstallBadge = document.getElementById('m-menu-install-badge');
+    if (mInstallBadge) {
+      mInstallBadge.innerText = 'Terpasang';
+      mInstallBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+    }
   });
+}
+
+// Global PWA Trigger function for Mobile Menu & Header
+let deferredPrompt = null;
+function triggerPWAInstall() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(({ outcome }) => {
+      console.log(`User response to install prompt: ${outcome}`);
+      deferredPrompt = null;
+      const installBtn = document.getElementById('btn-install-pwa');
+      if (installBtn) installBtn.classList.add('hidden');
+      const mInstallBadge = document.getElementById('m-menu-install-badge');
+      if (mInstallBadge) {
+        mInstallBadge.innerText = 'Terpasang';
+        mInstallBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+      }
+    });
+  } else {
+    showToast('Untuk pasang di HP: buka menu browser (titik 3 di Chrome atau tombol Share di Safari) lalu pilih "Tambahkan ke Layar Utama" (Add to Home screen).', 'info');
+  }
 }
 
 // Database Loading
@@ -180,12 +204,13 @@ function switchView(viewName) {
     cashier: document.getElementById('btn-m-nav-cashier'),
     cart: document.getElementById('btn-m-nav-cart'),
     products: document.getElementById('btn-m-nav-products'),
-    reports: document.getElementById('btn-m-nav-reports')
+    reports: document.getElementById('btn-m-nav-reports'),
+    menu: document.getElementById('btn-m-nav-menu')
   };
 
   Object.keys(mNavButtons).forEach((key) => {
     if (mNavButtons[key]) {
-      mNavButtons[key].className = "flex flex-col items-center justify-center w-16 text-slate-400 relative";
+      mNavButtons[key].className = "flex flex-col items-center justify-center flex-1 py-1 text-slate-400 relative";
     }
   });
 
@@ -198,7 +223,7 @@ function switchView(viewName) {
     cartSec.classList.remove('flex', 'w-full');
     
     if (navButtons.cashier) navButtons.cashier.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.cashier) mNavButtons.cashier.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.cashier) mNavButtons.cashier.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Mesin Kasir";
     renderProducts();
   } else if (viewName === 'cart') {
@@ -208,19 +233,19 @@ function switchView(viewName) {
     cartSec.classList.remove('hidden');
     cartSec.classList.add('flex', 'w-full');
     
-    if (mNavButtons.cart) mNavButtons.cart.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.cart) mNavButtons.cart.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Keranjang";
     renderCart();
   } else if (viewName === 'products') {
     document.getElementById('view-products').classList.remove('hidden');
     if (navButtons.products) navButtons.products.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.products) mNavButtons.products.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.products) mNavButtons.products.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Kelola Produk";
     renderInventoryTable();
   } else if (viewName === 'reports') {
     document.getElementById('view-reports').classList.remove('hidden');
     if (navButtons.reports) navButtons.reports.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center w-16 text-primary-500 font-bold relative";
+    if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
     document.getElementById('view-title').innerText = "Laporan Modal & Untung";
     
     // Default to Today for daily profit & modal tracking
@@ -1981,6 +2006,15 @@ function updateCloudStatusUI(status, message) {
     modalBadge.innerText = badgeText;
     modalBadge.className = `text-[10px] font-semibold px-2 py-0.5 rounded-full ${textColor} bg-dark-950 border border-slate-800`;
   }
+  const mMenuCloudStatus = document.getElementById('m-menu-cloud-status');
+  if (mMenuCloudStatus) {
+    mMenuCloudStatus.innerText = badgeText;
+    mMenuCloudStatus.className = `text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${textColor} bg-dark-950 border border-slate-800`;
+  }
+  const mNavDot = document.getElementById('m-nav-menu-dot');
+  if (mNavDot) {
+    mNavDot.className = `w-2 h-2 rounded-full absolute -top-0.5 -right-1.5 ${dotColor}`;
+  }
   if (alertIcon) alertIcon.className = `${alertIconClass} mt-0.5 text-base`;
   if (alertTitle) alertTitle.innerText = alertTitleText;
   if (alertDesc) alertDesc.innerText = message || 'Aplikasi siap digunakan.';
@@ -2198,8 +2232,36 @@ function updateStoreBrandingUI() {
     iconBox.className = `w-10 h-10 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white shadow-glow-primary flex-shrink-0`;
   }
 
+  // Update Mobile Menu Drawer Branding
+  const mStoreName = document.getElementById('m-menu-store-name');
+  if (mStoreName) mStoreName.innerText = store.name;
+
+  const mTagline = document.getElementById('m-menu-store-tagline');
+  if (mTagline) mTagline.innerText = store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Retail Store');
+
+  const mStoreIcon = document.getElementById('m-menu-store-icon');
+  if (mStoreIcon) mStoreIcon.className = `fa-solid ${store.icon || 'fa-store'} text-base`;
+
+  const mIconBox = document.getElementById('m-menu-store-icon-box');
+  if (mIconBox) {
+    mIconBox.className = `w-10 h-10 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white shadow-glow-primary flex-shrink-0`;
+  }
+
   // Update sempol live quick bar
   updateSempolQuickBarUI();
+}
+
+function openMobileMenuModal() {
+  const modal = document.getElementById('modal-mobile-menu');
+  if (!modal) return;
+  updateStoreBrandingUI();
+  updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+  modal.classList.remove('hidden');
+}
+
+function closeMobileMenuModal() {
+  const modal = document.getElementById('modal-mobile-menu');
+  if (modal) modal.classList.add('hidden');
 }
 
 function openStoreSwitcherModal() {
