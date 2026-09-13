@@ -1,12 +1,92 @@
-const DB_NAME = 'pos_database';
+const STORE_REGISTRY_KEY = 'pos_stores_registry';
+const ACTIVE_STORE_KEY = 'pos_active_store_id';
 const DB_VERSION = 2;
+
+const DEFAULT_STORES = [
+  {
+    id: 'store_gadget',
+    name: 'Ruang Temu Gadget & Electronic',
+    tagline: 'Retail & Aksesoris Elektronik',
+    type: 'retail',
+    icon: 'fa-mobile-screen-button',
+    badgeColor: 'from-indigo-500 to-purple-600',
+    dbName: 'pos_database'
+  },
+  {
+    id: 'store_sempol',
+    name: 'Sempol Ayam Crispy Juara',
+    tagline: 'Kuliner & Gorengan Tusukan',
+    type: 'food',
+    icon: 'fa-utensils',
+    badgeColor: 'from-amber-500 to-orange-600',
+    dbName: 'pos_database_sempol'
+  }
+];
 
 const DB = {
   db: null,
 
+  getActiveStoreId() {
+    return localStorage.getItem(ACTIVE_STORE_KEY) || 'store_gadget';
+  },
+
+  setActiveStoreId(id) {
+    localStorage.setItem(ACTIVE_STORE_KEY, id);
+  },
+
+  getAllStores() {
+    try {
+      const raw = localStorage.getItem(STORE_REGISTRY_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.error('Error reading store registry:', e);
+    }
+    localStorage.setItem(STORE_REGISTRY_KEY, JSON.stringify(DEFAULT_STORES));
+    return DEFAULT_STORES;
+  },
+
+  getActiveStore() {
+    const stores = this.getAllStores();
+    const activeId = this.getActiveStoreId();
+    return stores.find(s => s.id === activeId) || stores[0];
+  },
+
+  getCurrentDbName() {
+    const store = this.getActiveStore();
+    return store.dbName || (store.id === 'store_gadget' ? 'pos_database' : 'pos_database_' + store.id);
+  },
+
+  async switchStore(storeId) {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+    this.setActiveStoreId(storeId);
+    await this.init();
+  },
+
+  addNewStore(storeData) {
+    const stores = this.getAllStores();
+    const newId = 'store_' + Date.now();
+    const newStore = {
+      id: newId,
+      name: storeData.name,
+      tagline: storeData.tagline || 'Outlet Cabang Baru',
+      type: storeData.type || 'food',
+      icon: storeData.icon || 'fa-store',
+      badgeColor: storeData.badgeColor || 'from-emerald-500 to-teal-600',
+      dbName: 'pos_database_' + newId
+    };
+    stores.push(newStore);
+    localStorage.setItem(STORE_REGISTRY_KEY, JSON.stringify(stores));
+    return newStore;
+  },
+
   init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const dbName = this.getCurrentDbName();
+      console.log('Opening IndexedDB for store:', this.getActiveStoreId(), '-> DB:', dbName);
+      const request = indexedDB.open(dbName, DB_VERSION);
 
       request.onblocked = (e) => {
         console.warn('Database open is blocked. Reloading to release locks...');
@@ -110,7 +190,7 @@ const DB = {
   },
 
   async saveProduct(product) {
-    const res = await this.execute('products', 'readwrite', (store) => {
+    const resId = await this.execute('products', 'readwrite', (store) => {
       if (product.id) {
         product.id = Number(product.id);
         return store.put(product);
@@ -118,12 +198,11 @@ const DB = {
         return store.add(product);
       }
     });
+    const savedProduct = { ...product, id: product.id || resId };
     if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
-      const savedProd = { ...product };
-      if (!savedProd.id && typeof res === 'number') savedProd.id = res;
-      CloudDB.syncProduct(savedProd).catch(console.error);
+      CloudDB.syncProduct(savedProduct).catch(console.error);
     }
-    return res;
+    return resId;
   },
 
   async deleteProduct(id) {
@@ -140,7 +219,7 @@ const DB = {
   },
 
   async saveCategory(category) {
-    const res = await this.execute('categories', 'readwrite', (store) => {
+    const resId = await this.execute('categories', 'readwrite', (store) => {
       if (category.id) {
         category.id = Number(category.id);
         return store.put(category);
@@ -148,12 +227,11 @@ const DB = {
         return store.add(category);
       }
     });
+    const savedCategory = { ...category, id: category.id || resId };
     if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
-      const savedCat = { ...category };
-      if (!savedCat.id && typeof res === 'number') savedCat.id = res;
-      CloudDB.syncCategory(savedCat).catch(console.error);
+      CloudDB.syncCategory(savedCategory).catch(console.error);
     }
-    return res;
+    return resId;
   },
 
   async deleteCategory(id) {
@@ -190,9 +268,8 @@ const DB = {
     });
   },
 
-  async saveSettings(key, value) {
-    const res = await this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
-    return res;
+  saveSettings(key, value) {
+    return this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
   },
 
   // Import data dari Cloud Firestore ke IndexedDB Lokal
@@ -218,13 +295,163 @@ const DB = {
     return true;
   },
 
+  // Helper untuk mendapatkan stok bahan tusuk sempol
+  async getSempolStock() {
+    const products = await this.getProducts();
+    const sempol = products.find(p => p.isSempol);
+    return sempol ? sempol.stock : 0;
+  },
+
+  // Helper untuk menambah atau mengupdate stok tusuk sempol ke semua menu paket
+  async updateSempolStock(newStock) {
+    const products = await this.getProducts();
+    for (const p of products) {
+      if (p.isSempol) {
+        p.stock = Math.max(0, newStock);
+        await this.saveProduct(p);
+      }
+    }
+  },
+
   // Seeding initial premium products & settings
   async seedInitialData() {
+    const activeStoreId = this.getActiveStoreId();
     const products = await this.getProducts();
     const categories = await this.getCategories();
     const storeInfo = await this.getSettings('store_info');
 
-    // Default settings - Universal Electronic Shop
+    // ==========================================
+    // SEEDING KHUSUS: POS SEMPOL AYAM CRISPY
+    // ==========================================
+    if (activeStoreId === 'store_sempol') {
+      if (!storeInfo) {
+        await this.saveSettings('store_info', {
+          name: 'Sempol Ayam Crispy Juara',
+          address: 'Jl. Kuliner No. 8, Lapak Kaki Lima',
+          phone: '0812-3456-7890',
+          taxRate: 0,
+          serviceCharge: 0,
+          currency: 'IDR',
+          receiptFooter: 'Matur nuwun! Gurih, Renyah, Mantap!'
+        });
+      }
+
+      if (categories.length === 0) {
+        const sempolCats = [
+          { name: 'Paket Sempol' },
+          { name: 'Minuman Segar' },
+          { name: 'Ekstra & Saus' }
+        ];
+        for (const cat of sempolCats) {
+          await this.saveCategory(cat);
+        }
+      }
+
+      if (products.length === 0) {
+        const initialSempolProducts = [
+          {
+            name: 'Sempol Paket Puas (6 Tusuk)',
+            price: 10000,
+            cost: 2400,
+            unitCost: 400,
+            piecesPerUnit: 6,
+            stock: 100,
+            category: 'Paket Sempol',
+            code: 'SMP-001',
+            color: 'amber',
+            icon: 'fa-utensils',
+            isSempol: true
+          },
+          {
+            name: 'Sempol Paket Hemat (3 Tusuk)',
+            price: 5000,
+            cost: 1200,
+            unitCost: 400,
+            piecesPerUnit: 3,
+            stock: 100,
+            category: 'Paket Sempol',
+            code: 'SMP-002',
+            color: 'orange',
+            icon: 'fa-utensils',
+            isSempol: true
+          },
+          {
+            name: 'Sempol Paket Jumbo (10 Tusuk)',
+            price: 15000,
+            cost: 4000,
+            unitCost: 400,
+            piecesPerUnit: 10,
+            stock: 100,
+            category: 'Paket Sempol',
+            code: 'SMP-003',
+            color: 'yellow',
+            icon: 'fa-fire',
+            isSempol: true
+          },
+          {
+            name: 'Sempol Eceran (1 Tusuk)',
+            price: 2000,
+            cost: 400,
+            unitCost: 400,
+            piecesPerUnit: 1,
+            stock: 100,
+            category: 'Paket Sempol',
+            code: 'SMP-004',
+            color: 'rose',
+            icon: 'fa-utensils',
+            isSempol: true
+          },
+          {
+            name: 'Es Teh Manis Jumbo',
+            price: 5000,
+            cost: 1500,
+            unitCost: 1500,
+            piecesPerUnit: 1,
+            stock: 50,
+            category: 'Minuman Segar',
+            code: 'DRK-001',
+            color: 'emerald',
+            icon: 'fa-glass-water',
+            isSempol: false
+          },
+          {
+            name: 'Air Mineral Dingin',
+            price: 3000,
+            cost: 1500,
+            unitCost: 1500,
+            piecesPerUnit: 1,
+            stock: 40,
+            category: 'Minuman Segar',
+            code: 'DRK-002',
+            color: 'sky',
+            icon: 'fa-bottle-water',
+            isSempol: false
+          },
+          {
+            name: 'Ekstra Saus Sambal Pedas Manis',
+            price: 1000,
+            cost: 300,
+            unitCost: 300,
+            piecesPerUnit: 1,
+            stock: 80,
+            category: 'Ekstra & Saus',
+            code: 'TOP-001',
+            color: 'red',
+            icon: 'fa-pepper-hot',
+            isSempol: false
+          }
+        ];
+
+        for (const prod of initialSempolProducts) {
+          await this.saveProduct(prod);
+        }
+      }
+      return;
+    }
+
+    // ==========================================
+    // SEEDING DEFAULT: TOKO GADGET & ELECTRONIC
+    // ==========================================
     if (!storeInfo) {
       await this.saveSettings('store_info', {
         name: 'Ruang Temu Gadget & Electronic',
@@ -238,7 +465,6 @@ const DB = {
     }
 
     // Default categories for electronics
-    let catList = categories;
     if (categories.length === 0) {
       const defaultCats = [
         { name: 'Smartphone & Tablet' },
@@ -250,7 +476,6 @@ const DB = {
       for (const cat of defaultCats) {
         await this.saveCategory(cat);
       }
-      catList = await this.getCategories();
     }
 
     // Default products with mock QR/Barcodes (Electronics)
@@ -260,6 +485,8 @@ const DB = {
           name: 'iPhone 15 Pro Max 256GB',
           price: 22499000,
           cost: 18000000,
+          unitCost: 18000000,
+          piecesPerUnit: 1,
           stock: 15,
           category: 'Smartphone & Tablet',
           code: 'EL001',
@@ -270,6 +497,8 @@ const DB = {
           name: 'Samsung Galaxy S24 Ultra',
           price: 20999000,
           cost: 16500000,
+          unitCost: 16500000,
+          piecesPerUnit: 1,
           stock: 10,
           category: 'Smartphone & Tablet',
           code: 'EL002',
@@ -280,6 +509,8 @@ const DB = {
           name: 'Sony WH-1000XM5 ANC Headphone',
           price: 4899000,
           cost: 3800000,
+          unitCost: 3800000,
+          piecesPerUnit: 1,
           stock: 20,
           category: 'Audio & Headphone',
           code: 'EL003',
@@ -290,6 +521,8 @@ const DB = {
           name: 'JBL Charge 5 Bluetooth Speaker',
           price: 2599000,
           cost: 1950000,
+          unitCost: 1950000,
+          piecesPerUnit: 1,
           stock: 25,
           category: 'Audio & Headphone',
           code: 'EL004',
@@ -300,6 +533,8 @@ const DB = {
           name: 'Anker PowerCore 30W Powerbank',
           price: 450000,
           cost: 290000,
+          unitCost: 290000,
+          piecesPerUnit: 1,
           stock: 50,
           category: 'Aksesoris & Charger',
           code: 'EL005',
@@ -310,6 +545,8 @@ const DB = {
           name: 'MacBook Air M3 8/256GB',
           price: 16999000,
           cost: 14200000,
+          unitCost: 14200000,
+          piecesPerUnit: 1,
           stock: 8,
           category: 'Laptop & Komputer',
           code: 'EL006',
@@ -320,6 +557,8 @@ const DB = {
           name: 'Logitech MX Master 3S Mouse',
           price: 1450000,
           cost: 1050000,
+          unitCost: 1050000,
+          piecesPerUnit: 1,
           stock: 30,
           category: 'Laptop & Komputer',
           code: 'EL007',
@@ -330,6 +569,8 @@ const DB = {
           name: 'Apple Watch Series 9 GPS 45mm',
           price: 6499000,
           cost: 5100000,
+          unitCost: 5100000,
+          piecesPerUnit: 1,
           stock: 12,
           category: 'Wearable & Smartwatch',
           code: 'EL008',
@@ -340,6 +581,8 @@ const DB = {
           name: 'Baseus USB-C to USB-C 100W Cable',
           price: 85000,
           cost: 40000,
+          unitCost: 40000,
+          piecesPerUnit: 1,
           stock: 100,
           category: 'Aksesoris & Charger',
           code: 'EL009',

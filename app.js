@@ -128,9 +128,14 @@ async function loadInitialData() {
   if (State.storeInfo) {
     State.taxRate = State.storeInfo.taxRate ?? 10;
     State.serviceChargeRate = State.storeInfo.serviceCharge ?? 0;
-    document.getElementById('sidebar-store-name').innerText = State.storeInfo.name;
-    document.getElementById('label-cart-tax').innerText = `${State.taxRate + State.serviceChargeRate}%`;
+    const sNameEl = document.getElementById('sidebar-store-name');
+    if (sNameEl) sNameEl.innerText = State.storeInfo.name;
+    const taxEl = document.getElementById('label-cart-tax');
+    if (taxEl) taxEl.innerText = `${State.taxRate + State.serviceChargeRate}%`;
   }
+
+  // Update store switcher and branding UI
+  updateStoreBrandingUI();
 
   renderCategories();
   renderProducts();
@@ -880,12 +885,29 @@ async function submitTransaction() {
     // Save to Database
     await DB.saveTransaction(transaction);
 
-    // Deduct stocks locally
+    // Deduct stocks for Sempol shared inventory if any
+    let sempolSticksDeducted = 0;
+    State.cart.forEach(item => {
+      if (item.product.isSempol) {
+        sempolSticksDeducted += (item.product.piecesPerUnit || 1) * item.quantity;
+      }
+    });
+
+    if (sempolSticksDeducted > 0) {
+      // Deduct from ALL sempol products in the shared inventory
+      const currentSempolStock = await DB.getSempolStock();
+      const newSempolStock = Math.max(0, currentSempolStock - sempolSticksDeducted);
+      await DB.updateSempolStock(newSempolStock);
+    }
+
+    // Deduct stocks for non-sempol items
     for (const item of State.cart) {
-      const prod = State.products.find(p => p.id === item.product.id);
-      if (prod) {
-        prod.stock = Math.max(0, prod.stock - item.quantity);
-        await DB.saveProduct(prod);
+      if (!item.product.isSempol) {
+        const prod = State.products.find(p => p.id === item.product.id);
+        if (prod) {
+          prod.stock = Math.max(0, prod.stock - item.quantity);
+          await DB.saveProduct(prod);
+        }
       }
     }
 
@@ -1032,7 +1054,7 @@ async function renderInventoryTable() {
           <td class="p-4 text-right font-bold text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</td>
           <td class="p-4 text-center">
             <span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${p.stock <= 5 ? 'bg-danger-500/20 text-danger-400' : 'bg-success-500/20 text-success-400'}">
-              ${p.stock} pcs
+              ${p.stock} ${p.isSempol ? 'tusuk' : 'pcs'}
             </span>
           </td>
           <td class="p-4 text-right pr-6">
@@ -1080,7 +1102,7 @@ async function renderInventoryTable() {
             <div class="flex items-center gap-4 flex-shrink-0">
               <div class="text-right">
                 <div class="font-extrabold text-sm text-primary-500">Rp ${p.price.toLocaleString('id-ID')}</div>
-                <div class="text-[10px] text-slate-500 mt-0.5">Stok: <span class="font-bold text-slate-300">${p.stock}</span></div>
+                <div class="text-[10px] text-slate-500 mt-0.5">Stok: <span class="font-bold text-slate-300">${p.stock} ${p.isSempol ? 'tusuk' : 'pcs'}</span></div>
               </div>
               
               <div class="flex gap-1.5">
@@ -1109,17 +1131,63 @@ function openProductModal(mode, prodId = null) {
   document.getElementById('product-id').value = '';
   State.activeProductEdit = null;
 
+  const isSempolStore = DB.getActiveStoreId() === 'store_sempol';
+  const sempolCheckbox = document.getElementById('product-is-sempol');
+  if (sempolCheckbox) sempolCheckbox.checked = isSempolStore;
+  const prodPieces = document.getElementById('product-pieces');
+  if (prodPieces) prodPieces.value = 1;
+  const prodUnitCost = document.getElementById('product-unit-cost');
+  if (prodUnitCost) prodUnitCost.value = 400;
+
   if (mode === 'add') {
     title.innerText = "Tambah Produk Baru";
+    if (isSempolStore) {
+      document.getElementById('product-color').value = 'amber';
+      document.getElementById('product-icon').value = 'fa-utensils';
+    }
   } else {
     title.innerText = "Edit Produk";
   }
 
+  toggleSempolFields();
   modal.classList.remove('hidden');
 }
 
 function closeProductModal() {
   document.getElementById('modal-product').classList.add('hidden');
+}
+
+function toggleSempolFields() {
+  const checkbox = document.getElementById('product-is-sempol');
+  if (!checkbox) return;
+  const isChecked = checkbox.checked;
+  const fields = document.getElementById('sempol-product-fields');
+  const hint = document.getElementById('sempol-calc-hint');
+  if (fields) {
+    if (isChecked) {
+      fields.classList.remove('hidden');
+    } else {
+      fields.classList.add('hidden');
+    }
+  }
+  if (hint) {
+    if (isChecked) {
+      hint.classList.remove('hidden');
+      calculateProductCostFromUnit();
+    } else {
+      hint.classList.add('hidden');
+    }
+  }
+}
+
+function calculateProductCostFromUnit() {
+  const sempolCheckbox = document.getElementById('product-is-sempol');
+  if (!sempolCheckbox || !sempolCheckbox.checked) return;
+  const pieces = Number(document.getElementById('product-pieces').value) || 1;
+  const unitCost = Number(document.getElementById('product-unit-cost').value) || 0;
+  if (pieces > 0 && unitCost > 0) {
+    document.getElementById('product-cost').value = pieces * unitCost;
+  }
 }
 
 function populateCategorySelects() {
@@ -1148,17 +1216,39 @@ async function editProduct(id) {
   document.getElementById('product-stock').value = prod.stock;
   document.getElementById('product-color').value = prod.color || 'indigo';
   document.getElementById('product-icon').value = prod.icon || 'fa-tag';
+
+  const sempolCheckbox = document.getElementById('product-is-sempol');
+  if (sempolCheckbox) sempolCheckbox.checked = !!prod.isSempol;
+  const prodPieces = document.getElementById('product-pieces');
+  if (prodPieces) prodPieces.value = prod.piecesPerUnit || 1;
+  const prodUnitCost = document.getElementById('product-unit-cost');
+  if (prodUnitCost) prodUnitCost.value = prod.unitCost || 400;
+
+  toggleSempolFields();
 }
 
 async function saveProductHandler(e) {
   e.preventDefault();
 
   const id = document.getElementById('product-id').value;
+  const sempolCheckbox = document.getElementById('product-is-sempol');
+  const isSempol = sempolCheckbox ? sempolCheckbox.checked : false;
+  const piecesPerUnit = Number(document.getElementById('product-pieces')?.value) || 1;
+  const unitCost = Number(document.getElementById('product-unit-cost')?.value) || 0;
+  let cost = Number(document.getElementById('product-cost').value);
+
+  if (isSempol && piecesPerUnit > 0 && unitCost > 0 && (!cost || cost === 0)) {
+    cost = piecesPerUnit * unitCost;
+  }
+
   const product = {
     name: document.getElementById('product-name').value,
     category: document.getElementById('product-category').value,
     code: document.getElementById('product-code').value.trim(),
-    cost: Number(document.getElementById('product-cost').value),
+    cost: cost,
+    unitCost: unitCost,
+    piecesPerUnit: piecesPerUnit,
+    isSempol: isSempol,
     price: Number(document.getElementById('product-price').value),
     stock: Number(document.getElementById('product-stock').value),
     color: document.getElementById('product-color').value,
@@ -1986,6 +2076,7 @@ async function syncDownloadAllHandler() {
 function openMobileMenuModal() {
   const modal = document.getElementById('modal-mobile-menu');
   if (!modal) return;
+  updateStoreBrandingUI();
   updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
   modal.classList.remove('hidden');
 }
@@ -1993,6 +2084,235 @@ function openMobileMenuModal() {
 function closeMobileMenuModal() {
   const modal = document.getElementById('modal-mobile-menu');
   if (modal) modal.classList.add('hidden');
+}
+
+// ====================================================
+// MULTI-STORE SWITCHER & PROFILE MANAGEMENT
+// ====================================================
+
+function updateStoreBrandingUI() {
+  const store = DB.getActiveStore();
+
+  const storeNameEls = [
+    document.getElementById('sidebar-store-name'),
+    document.getElementById('header-store-name')
+  ];
+  storeNameEls.forEach(el => {
+    if (el) el.innerText = store.name;
+  });
+
+  const taglineEl = document.getElementById('sidebar-store-tagline');
+  if (taglineEl) taglineEl.innerText = store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Retail Store');
+
+  const sidebarIcon = document.getElementById('sidebar-store-icon');
+  if (sidebarIcon) {
+    sidebarIcon.className = `fa-solid ${store.icon || 'fa-store'} text-lg`;
+  }
+
+  const headerIcon = document.getElementById('header-store-icon');
+  if (headerIcon) {
+    headerIcon.className = `fa-solid ${store.icon || 'fa-store'} text-amber-400`;
+  }
+
+  const iconBox = document.getElementById('sidebar-store-icon-box');
+  if (iconBox) {
+    iconBox.className = `w-10 h-10 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white shadow-glow-primary flex-shrink-0`;
+  }
+
+  // Update Mobile Menu Drawer Branding
+  const mStoreName = document.getElementById('m-menu-store-name');
+  if (mStoreName) mStoreName.innerText = store.name;
+
+  const mTagline = document.getElementById('m-menu-store-tagline');
+  if (mTagline) mTagline.innerText = store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Retail Store');
+
+  const mStoreIcon = document.getElementById('m-menu-store-icon');
+  if (mStoreIcon) mStoreIcon.className = `fa-solid ${store.icon || 'fa-store'} text-base`;
+
+  const mIconBox = document.getElementById('m-menu-store-icon-box');
+  if (mIconBox) {
+    mIconBox.className = `w-10 h-10 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white shadow-glow-primary flex-shrink-0`;
+  }
+
+  // Update sempol live quick bar
+  updateSempolQuickBarUI();
+}
+
+function openStoreSwitcherModal() {
+  const modal = document.getElementById('modal-store-switcher');
+  if (!modal) return;
+  renderStoreSwitcherList();
+  modal.classList.remove('hidden');
+}
+
+function closeStoreSwitcherModal() {
+  const modal = document.getElementById('modal-store-switcher');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderStoreSwitcherList() {
+  const container = document.getElementById('stores-list-container');
+  if (!container) return;
+
+  const stores = DB.getAllStores();
+  const activeId = DB.getActiveStoreId();
+
+  let html = '';
+  stores.forEach(store => {
+    const isActive = store.id === activeId;
+    html += `
+      <div class="p-4 rounded-xl border transition-all ${
+        isActive 
+          ? 'bg-amber-500/10 border-amber-500/50 shadow-lg' 
+          : 'bg-dark-950/60 border-slate-800 hover:border-slate-700'
+      } flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5 min-w-0">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-amber-500 to-orange-600'} flex items-center justify-center text-white text-lg flex-shrink-0 shadow-md">
+            <i class="fa-solid ${store.icon || 'fa-store'}"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h4 class="font-bold text-white text-sm md:text-base truncate">${store.name}</h4>
+              ${isActive ? '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-extrabold text-[10px] border border-amber-500/40">Aktif</span>' : ''}
+            </div>
+            <p class="text-xs text-slate-400 truncate mt-0.5">${store.tagline || (store.type === 'food' ? 'Street Food & Minuman' : 'Retail & Toko')}</p>
+          </div>
+        </div>
+
+        <div class="flex-shrink-0">
+          ${isActive 
+            ? '<span class="px-3 py-1.5 bg-slate-800/80 text-slate-400 rounded-lg text-xs font-bold border border-slate-700 cursor-default">Sedang Aktif</span>' 
+            : `<button onclick="switchStoreHandler('${store.id}')" class="px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-xs font-bold transition-all shadow-glow-primary flex items-center gap-1.5">
+                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                <span>Pilih POS Ini</span>
+               </button>`
+          }
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+async function switchStoreHandler(storeId) {
+  try {
+    showToast('Memuat database profil toko...', 'info');
+    await DB.switchStore(storeId);
+    State.cart = [];
+    localStorage.removeItem('pos_cart_cache');
+    await loadInitialData();
+    switchView('cashier');
+    closeStoreSwitcherModal();
+    const activeStore = DB.getActiveStore();
+    showToast(`Berhasil berpindah ke: ${activeStore.name}!`, 'success');
+  } catch (err) {
+    console.error('Error switching store:', err);
+    alert('Gagal beralih toko: ' + err.message);
+  }
+}
+
+async function createNewStoreHandler(e) {
+  e.preventDefault();
+  const name = document.getElementById('new-store-name').value.trim();
+  const type = document.getElementById('new-store-type').value;
+  const tagline = document.getElementById('new-store-tagline').value.trim();
+
+  if (!name) return;
+
+  const icon = type === 'food' ? 'fa-utensils' : (type === 'retail' ? 'fa-shop' : 'fa-handshake');
+  const badgeColor = type === 'food' ? 'from-amber-500 to-orange-600' : 'from-indigo-500 to-purple-600';
+
+  const newStore = DB.addNewStore({
+    name,
+    type,
+    tagline,
+    icon,
+    badgeColor
+  });
+
+  document.getElementById('form-new-store').reset();
+  await switchStoreHandler(newStore.id);
+  showToast(`Toko baru "${newStore.name}" berhasil dibuat dan diaktifkan!`, 'success');
+}
+
+
+// ====================================================
+// SEMPOL STOCK & BUNDLING MANAGEMENT
+// ====================================================
+
+async function updateSempolQuickBarUI() {
+  const bar = document.getElementById('sempol-quick-bar');
+  if (!bar) return;
+
+  const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
+  if (!isSempolMode) {
+    bar.classList.add('hidden');
+    return;
+  }
+
+  bar.classList.remove('hidden');
+  const sempolProd = State.products.find(p => p.isSempol);
+  const stockCount = sempolProd ? sempolProd.stock : 0;
+  const unitCost = sempolProd ? (sempolProd.unitCost || 400) : 400;
+
+  const badge = document.getElementById('sempol-stock-count-badge');
+  if (badge) badge.innerText = `${stockCount} Tusuk`;
+
+  const costEl = document.getElementById('sempol-unit-cost-val');
+  if (costEl) costEl.innerText = unitCost.toLocaleString('id-ID');
+}
+
+async function quickAddSempolStock(amount) {
+  const current = await DB.getSempolStock();
+  const newStock = current + amount;
+  await DB.updateSempolStock(newStock);
+  await loadInitialData();
+  renderProducts();
+  showToast(`+${amount} Tusuk sempol berhasil ditambahkan! Total sekarang: ${newStock} tusuk.`, 'success');
+}
+
+function openSempolStockModal() {
+  const modal = document.getElementById('modal-sempol-stock');
+  if (!modal) return;
+  const sempolProd = State.products.find(p => p.isSempol);
+  const stock = sempolProd ? sempolProd.stock : 100;
+  const unitCost = sempolProd ? (sempolProd.unitCost || 400) : 400;
+
+  document.getElementById('input-modal-sempol-stock').value = stock;
+  document.getElementById('input-modal-sempol-cost').value = unitCost;
+  modal.classList.remove('hidden');
+}
+
+function closeSempolStockModal() {
+  const modal = document.getElementById('modal-sempol-stock');
+  if (modal) modal.classList.add('hidden');
+}
+
+function adjustSempolModalStock(amt) {
+  const input = document.getElementById('input-modal-sempol-stock');
+  input.value = Math.max(0, (Number(input.value) || 0) + amt);
+}
+
+async function saveSempolStockHandler(e) {
+  e.preventDefault();
+  const stock = Number(document.getElementById('input-modal-sempol-stock').value) || 0;
+  const unitCost = Number(document.getElementById('input-modal-sempol-cost').value) || 400;
+
+  const products = await DB.getProducts();
+  for (const p of products) {
+    if (p.isSempol) {
+      p.stock = stock;
+      p.unitCost = unitCost;
+      p.cost = (p.piecesPerUnit || 1) * unitCost;
+      await DB.saveProduct(p);
+    }
+  }
+
+  await loadInitialData();
+  renderProducts();
+  closeSempolStockModal();
+  showToast(`Stok Sempol berhasil diperbarui: ${stock} Tusuk (Modal: Rp ${unitCost}/tusuk)!`, 'success');
 }
 
 
