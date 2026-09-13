@@ -280,6 +280,23 @@ const DB = {
     return this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
   },
 
+  // Auth Settings (PIN Kasir & Admin)
+  async getAuthSettings() {
+    const defaultAuth = {
+      required: false,
+      adminPin: '1234',
+      cashierPin: '0000',
+      adminName: 'Admin / Owner',
+      cashierName: 'Kasir Utama'
+    };
+    const saved = await this.getSettings('auth_config');
+    return saved ? { ...defaultAuth, ...saved } : defaultAuth;
+  },
+
+  async saveAuthSettings(config) {
+    return this.saveSettings('auth_config', config);
+  },
+
   // Expenses CRUD (Buku Kas & Pengeluaran)
   getExpenses() {
     return new Promise((resolve) => {
@@ -289,9 +306,13 @@ const DB = {
     });
   },
 
-  saveExpense(expense) {
+  async saveExpense(expense) {
     if (!expense.timestamp) expense.timestamp = Date.now();
-    return this.execute('expenses', 'readwrite', (store) => store.put(expense));
+    const res = await this.execute('expenses', 'readwrite', (store) => store.put(expense));
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.syncExpense(expense).catch(console.error);
+    }
+    return res;
   },
 
   deleteExpense(id) {

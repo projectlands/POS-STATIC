@@ -11,7 +11,12 @@ const State = {
   serviceChargeRate: 5,
   paymentMethod: 'Cash',
   cameraScanner: null,
-  activeProductEdit: null
+  activeProductEdit: null,
+  currentUser: { role: 'admin', name: 'Admin / Owner' },
+  authSettings: { required: false, adminPin: '1234', cashierPin: '0000' },
+  authPendingAction: null,
+  targetAuthRole: 'admin',
+  pinInput: ''
 };
 
 // Initialization on DOM Loaded
@@ -137,6 +142,20 @@ async function loadInitialData() {
   // Update store switcher and branding UI
   updateStoreBrandingUI();
 
+  // Load Auth / PIN Settings
+  try {
+    State.authSettings = await DB.getAuthSettings();
+    const savedRole = sessionStorage.getItem('pos_user_role');
+    if (savedRole === 'cashier' || (State.authSettings?.required && !savedRole)) {
+      State.currentUser = { role: 'cashier', name: 'Kasir Utama' };
+    } else {
+      State.currentUser = { role: 'admin', name: 'Admin / Owner' };
+    }
+    updateAuthUI();
+  } catch (err) {
+    console.warn('Failed to load auth settings:', err);
+  }
+
   renderCategories();
   renderProducts();
   populateCategorySelects();
@@ -176,6 +195,13 @@ function switchView(viewName) {
   // If desktop screen size and trying to open mobile cart view, redirect to cashier
   if (window.innerWidth >= 768 && viewName === 'cart') {
     viewName = 'cashier';
+  }
+
+  // Auth Guard: Kasir hanya boleh mengakses kasir & keranjang
+  if ((viewName === 'products' || viewName === 'reports') && State.currentUser?.role === 'cashier') {
+    showToast('Akses dibatasi untuk Kasir. Masukkan PIN Admin untuk membuka menu ini.', 'info');
+    openAuthModal('admin', () => switchView(viewName));
+    return;
   }
 
   State.activeView = viewName;
@@ -1123,6 +1149,7 @@ async function renderInventoryTable() {
 }
 
 function openProductModal(mode, prodId = null) {
+  if (!requireAdmin(() => openProductModal(mode, prodId))) return;
   const modal = document.getElementById('modal-product');
   const title = document.getElementById('product-modal-title');
   const form = document.getElementById('form-product');
@@ -1272,6 +1299,7 @@ async function saveProductHandler(e) {
 }
 
 async function deleteProductHandler(id) {
+  if (!requireAdmin(() => deleteProductHandler(id))) return;
   if (confirm("Apakah Anda yakin ingin menghapus produk ini?")) {
     try {
       await DB.deleteProduct(id);
@@ -1669,6 +1697,7 @@ function renderSalesTrendChart(txList, dateStartStr, dateEndStr) {
 
 // Global Database Reset to default electronic sample data
 async function resetDatabaseHandler() {
+  if (!requireAdmin(() => resetDatabaseHandler())) return;
   if (confirm("Apakah Anda yakin ingin menghapus semua data dan memulihkan data sampel elektronik? Tindakan ini akan menghapus semua produk kustom dan transaksi Anda.")) {
     try {
       if (DB.db) {
@@ -1697,6 +1726,7 @@ async function resetDatabaseHandler() {
 
 // Store Settings Modal UI Handlers
 function openStoreSettingsModal() {
+  if (!requireAdmin(() => openStoreSettingsModal())) return;
   const modal = document.getElementById('modal-store-settings');
   if (!modal) return;
   
@@ -1850,8 +1880,309 @@ function wrapAndCenter(text, width = 40) {
 
 
 // ====================================================
-// CLOUD DATABASE INTEGRATION (FIREBASE FIRESTORE)
+// AUTHENTICATION & ROLE MANAGEMENT (ADMIN & KASIR)
 // ====================================================
+
+function requireAdmin(actionCallback) {
+  if (State.currentUser?.role === 'cashier') {
+    showToast('Aksi ini memerlukan hak akses Administrator. Masukkan PIN Admin.', 'info');
+    openAuthModal('admin', actionCallback);
+    return false;
+  }
+  if (typeof actionCallback === 'function') {
+    actionCallback();
+  }
+  return true;
+}
+
+function updateAuthUI() {
+  const role = State.currentUser?.role || 'admin';
+  const isAdmin = role === 'admin';
+
+  // Update Header Elements
+  const headerName = document.getElementById('header-user-name');
+  const headerBadge = document.getElementById('header-user-role-badge');
+  const headerAvatar = document.getElementById('header-user-avatar');
+
+  if (headerName) headerName.innerText = isAdmin ? 'Admin / Owner' : 'Kasir Utama';
+  if (headerBadge) {
+    headerBadge.innerText = isAdmin ? 'Administrator' : 'Kasir';
+    headerBadge.className = isAdmin 
+      ? 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-400 border border-primary-500/30 uppercase inline-block'
+      : 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase inline-block';
+  }
+  if (headerAvatar) {
+    headerAvatar.className = isAdmin
+      ? 'w-8 h-8 md:w-9 md:h-9 rounded-lg bg-primary-500/20 border border-primary-500/30 flex items-center justify-center text-primary-400 group-hover:bg-primary-500/30 transition-colors'
+      : 'w-8 h-8 md:w-9 md:h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/30 transition-colors';
+    headerAvatar.innerHTML = `<i class="fa-solid ${isAdmin ? 'fa-user-shield' : 'fa-cash-register'} text-sm"></i>`;
+  }
+
+  // Update Mobile Drawer Elements
+  const mRoleName = document.getElementById('m-menu-role-name');
+  const mRoleBadge = document.getElementById('m-menu-role-badge');
+  const mRoleAvatar = document.getElementById('m-menu-role-avatar');
+
+  if (mRoleName) mRoleName.innerText = isAdmin ? 'Admin / Owner' : 'Kasir Utama';
+  if (mRoleBadge) {
+    mRoleBadge.innerText = isAdmin ? 'Admin' : 'Kasir';
+    mRoleBadge.className = isAdmin
+      ? 'text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-300 border border-primary-500/40'
+      : 'text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+  }
+  if (mRoleAvatar) {
+    mRoleAvatar.className = isAdmin
+      ? 'w-11 h-11 rounded-xl bg-primary-500/20 border border-primary-500/40 flex items-center justify-center text-primary-400 flex-shrink-0'
+      : 'w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0';
+    mRoleAvatar.innerHTML = `<i class="fa-solid ${isAdmin ? 'fa-user-shield' : 'fa-cash-register'} text-xl"></i>`;
+  }
+
+  // Auth notice in Cloud Modal
+  const authNotice = document.getElementById('cloud-auth-notice');
+  if (authNotice) {
+    if (CloudDB?.status === 'connected' || State.authSettings?.required) {
+      authNotice.classList.remove('hidden');
+    } else {
+      authNotice.classList.add('hidden');
+    }
+  }
+}
+
+function openAuthModal(targetRole = 'admin', onSuccess = null) {
+  const modal = document.getElementById('modal-auth-pin');
+  if (!modal) return;
+
+  State.targetAuthRole = targetRole;
+  State.authPendingAction = onSuccess;
+  State.pinInput = '';
+  updatePinDotsUI();
+
+  const currentRoleEl = document.getElementById('auth-modal-current-role');
+  if (currentRoleEl) {
+    currentRoleEl.innerText = State.currentUser?.role === 'admin' ? 'Administrator' : 'Kasir';
+    currentRoleEl.className = State.currentUser?.role === 'admin' ? 'text-primary-400 font-semibold' : 'text-emerald-400 font-semibold';
+  }
+
+  selectAuthRole(targetRole);
+
+  const errorEl = document.getElementById('auth-error-msg');
+  if (errorEl) errorEl.classList.add('hidden');
+
+  modal.classList.remove('hidden');
+
+  // Focus hidden input for physical keyboard entry
+  const pinInput = document.getElementById('auth-pin-input');
+  if (pinInput) {
+    pinInput.value = '';
+    pinInput.focus();
+    pinInput.oninput = (e) => {
+      State.pinInput = e.target.value.replace(/\D/g, '').substring(0, 4);
+      updatePinDotsUI();
+      if (State.pinInput.length === 4) {
+        submitPinLogin();
+      }
+    };
+  }
+}
+
+function closeAuthModal() {
+  const modal = document.getElementById('modal-auth-pin');
+  if (modal) modal.classList.add('hidden');
+  State.pinInput = '';
+  State.authPendingAction = null;
+}
+
+function selectAuthRole(role) {
+  State.targetAuthRole = role;
+  const btnAdmin = document.getElementById('btn-auth-tab-admin');
+  const btnCashier = document.getElementById('btn-auth-tab-cashier');
+  const label = document.getElementById('auth-target-role-label');
+  const modalIcon = document.getElementById('auth-modal-icon');
+  const modalIconBox = document.getElementById('auth-modal-icon-box');
+
+  if (role === 'admin') {
+    if (btnAdmin) btnAdmin.className = "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 bg-primary-600 text-white shadow-glow-primary";
+    if (btnCashier) btnCashier.className = "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    if (label) label.innerText = "Administrator";
+    if (modalIcon) modalIcon.className = "fa-solid fa-user-shield text-sm";
+    if (modalIconBox) modalIconBox.className = "w-8 h-8 rounded-lg bg-primary-500/20 border border-primary-500/40 flex items-center justify-center text-primary-400";
+  } else {
+    if (btnCashier) btnCashier.className = "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-lg";
+    if (btnAdmin) btnAdmin.className = "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    if (label) label.innerText = "Kasir Utama";
+    if (modalIcon) modalIcon.className = "fa-solid fa-cash-register text-sm";
+    if (modalIconBox) modalIconBox.className = "w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400";
+  }
+
+  State.pinInput = '';
+  updatePinDotsUI();
+  const errorEl = document.getElementById('auth-error-msg');
+  if (errorEl) errorEl.classList.add('hidden');
+}
+
+function pressPinKey(digit) {
+  if (State.pinInput.length < 4) {
+    State.pinInput += digit;
+    updatePinDotsUI();
+    if (State.pinInput.length === 4) {
+      setTimeout(() => {
+        submitPinLogin();
+      }, 100);
+    }
+  }
+}
+
+function clearPinInput() {
+  State.pinInput = '';
+  updatePinDotsUI();
+  const pinInput = document.getElementById('auth-pin-input');
+  if (pinInput) pinInput.value = '';
+  const errorEl = document.getElementById('auth-error-msg');
+  if (errorEl) errorEl.classList.add('hidden');
+}
+
+function updatePinDotsUI() {
+  const len = State.pinInput.length;
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById(`pin-dot-${i}`);
+    if (dot) {
+      if (i < len) {
+        dot.className = "w-3.5 h-3.5 rounded-full border-2 border-primary-500 bg-primary-500 scale-110 transition-all";
+      } else {
+        dot.className = "w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all";
+      }
+    }
+  }
+}
+
+async function submitPinLogin() {
+  const enteredPin = State.pinInput;
+  const targetRole = State.targetAuthRole;
+  const errorEl = document.getElementById('auth-error-msg');
+  const errorText = document.getElementById('auth-error-text');
+
+  if (enteredPin.length !== 4) {
+    if (errorEl && errorText) {
+      errorText.innerText = "Masukkan 4 digit PIN!";
+      errorEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  // Verify PIN against authSettings
+  const validAdminPin = State.authSettings?.adminPin || '1234';
+  const validCashierPin = State.authSettings?.cashierPin || '0000';
+
+  let isValid = false;
+  if (targetRole === 'admin' && enteredPin === validAdminPin) {
+    isValid = true;
+    State.currentUser = { role: 'admin', name: 'Admin / Owner' };
+    sessionStorage.setItem('pos_user_role', 'admin');
+  } else if (targetRole === 'cashier' && (enteredPin === validCashierPin || enteredPin === validAdminPin)) {
+    // Admin PIN can also unlock cashier mode
+    isValid = true;
+    State.currentUser = { role: 'cashier', name: 'Kasir Utama' };
+    sessionStorage.setItem('pos_user_role', 'cashier');
+  }
+
+  if (isValid) {
+    updateAuthUI();
+    const actionToRun = State.authPendingAction;
+    closeAuthModal();
+    showToast(`Berhasil masuk sebagai ${State.currentUser.name}`, 'success');
+
+    if (typeof actionToRun === 'function') {
+      actionToRun();
+    }
+  } else {
+    if (errorEl && errorText) {
+      errorText.innerText = `PIN salah untuk ${targetRole === 'admin' ? 'Administrator' : 'Kasir'}. Coba lagi.`;
+      errorEl.classList.remove('hidden');
+    }
+    // Shake effect & clear
+    clearPinInput();
+  }
+}
+
+// PIN Settings (Ubah PIN)
+function openChangePinModal() {
+  const modal = document.getElementById('modal-change-pin');
+  if (!modal) return;
+  const form = document.getElementById('form-change-pin');
+  if (form) form.reset();
+  modal.classList.remove('hidden');
+}
+
+function closeChangePinModal() {
+  const modal = document.getElementById('modal-change-pin');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function saveNewPinHandler(e) {
+  e.preventDefault();
+  const currentAdminPin = document.getElementById('input-current-admin-pin').value.trim();
+  const newAdminPin = document.getElementById('input-new-admin-pin').value.trim();
+  const newCashierPin = document.getElementById('input-new-cashier-pin').value.trim();
+
+  const validAdminPin = State.authSettings?.adminPin || '1234';
+  if (currentAdminPin !== validAdminPin) {
+    alert("PIN Admin saat ini tidak cocok! Verifikasi gagal.");
+    return;
+  }
+
+  if (newAdminPin.length < 4 || newCashierPin.length < 4) {
+    alert("PIN baru harus minimal 4 digit angka!");
+    return;
+  }
+
+  try {
+    const updatedSettings = {
+      required: true,
+      adminPin: newAdminPin,
+      cashierPin: newCashierPin
+    };
+    await DB.saveAuthSettings(updatedSettings);
+    State.authSettings = updatedSettings;
+    closeChangePinModal();
+    showToast("PIN Admin dan Kasir berhasil diperbarui!", 'success');
+  } catch (err) {
+    console.error('Failed to update PIN:', err);
+    alert('Gagal menyimpan PIN: ' + err.message);
+  }
+}
+
+
+// ====================================================
+// MULTI-DATABASE INTEGRATION (SHEETS / MYSQL / FIREBASE)
+// ====================================================
+
+function switchCloudProviderTab(provider) {
+  const providers = ['sheets', 'mysql', 'firebase'];
+  providers.forEach(p => {
+    const tabBtn = document.getElementById(`tab-provider-${p}`);
+    const panel = document.getElementById(`panel-provider-${p}`);
+    if (p === provider) {
+      if (panel) panel.classList.remove('hidden');
+      if (tabBtn) {
+        if (p === 'sheets') {
+          tabBtn.className = "p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all bg-emerald-950/40 border-emerald-500 text-emerald-300 shadow-md";
+        } else if (p === 'mysql') {
+          tabBtn.className = "p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all bg-sky-950/40 border-sky-500 text-sky-300 shadow-md";
+        } else {
+          tabBtn.className = "p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all bg-amber-950/40 border-amber-500 text-amber-300 shadow-md";
+        }
+      }
+    } else {
+      if (panel) panel.classList.add('hidden');
+      if (tabBtn) {
+        tabBtn.className = "p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700";
+      }
+    }
+  });
+
+  const hiddenInput = document.getElementById('cloud-selected-provider');
+  if (hiddenInput) hiddenInput.value = provider;
+}
 
 function initCloudModule() {
   if (typeof CloudDB === 'undefined') return;
@@ -1860,8 +2191,12 @@ function initCloudModule() {
     updateCloudStatusUI(status, message);
   };
 
-  CloudDB.init().then((connected) => {
+  CloudDB.init().then(async (connected) => {
     console.log('CloudDB initialized. Connected:', connected);
+    if (connected) {
+      State.authSettings = await DB.getAuthSettings();
+      updateAuthUI();
+    }
     updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
   }).catch((err) => {
     console.error('CloudDB init error:', err);
@@ -1882,31 +2217,41 @@ function updateCloudStatusUI(status, message) {
   const alertDesc = document.getElementById('cloud-status-alert-desc');
   const mMenuStatus = document.getElementById('m-menu-cloud-status');
   const mNavDot = document.getElementById('m-nav-menu-dot');
+  const authNotice = document.getElementById('cloud-auth-notice');
+
+  const provider = CloudDB?.provider || 'sheets';
+  const providerName = CloudDB ? CloudDB.getProviderName(provider) : 'Database Eksternal';
 
   let dotColor = 'bg-slate-500';
   let badgeText = 'Lokal Saja';
   let textColor = 'text-slate-400';
   let alertIconClass = 'fa-solid fa-circle-info text-sky-400';
-  let alertTitleText = 'Status Cloud: Lokal Saja';
+  let alertTitleText = 'Status: Database Lokal Saja';
 
   if (status === 'connected') {
     dotColor = 'bg-emerald-500';
-    badgeText = 'Cloud Aktif';
+    badgeText = `${providerName} Aktif`;
     textColor = 'text-emerald-400';
     alertIconClass = 'fa-solid fa-circle-check text-emerald-400';
-    alertTitleText = 'Terhubung ke Firebase Firestore';
+    alertTitleText = `Terhubung ke ${providerName}`;
+    if (authNotice) authNotice.classList.remove('hidden');
   } else if (status === 'connecting') {
     dotColor = 'bg-amber-500 animate-ping';
     badgeText = 'Menghubungkan...';
     textColor = 'text-amber-400';
     alertIconClass = 'fa-solid fa-arrows-rotate fa-spin text-amber-400';
-    alertTitleText = 'Sedang Menghubungkan ke Cloud...';
+    alertTitleText = `Menghubungkan ke ${providerName}...`;
   } else if (status === 'error') {
     dotColor = 'bg-danger-500';
     badgeText = 'Koneksi Error';
     textColor = 'text-danger-400';
     alertIconClass = 'fa-solid fa-triangle-exclamation text-danger-400';
-    alertTitleText = 'Koneksi Cloud Bermasalah';
+    alertTitleText = 'Koneksi Database Bermasalah';
+  } else {
+    if (authNotice) {
+      if (State.authSettings?.required) authNotice.classList.remove('hidden');
+      else authNotice.classList.add('hidden');
+    }
   }
 
   if (dot) dot.className = `w-2 h-2 rounded-full ${dotColor}`;
@@ -1930,18 +2275,47 @@ function updateCloudStatusUI(status, message) {
 }
 
 function openCloudSettingsModal() {
+  if (!requireAdmin(() => openCloudSettingsModal())) return;
   const modal = document.getElementById('modal-cloud-settings');
   if (!modal) return;
 
   const config = CloudDB.getConfig() || {};
-  document.getElementById('cloud-project-id').value = config.projectId || '';
-  document.getElementById('cloud-api-key').value = config.apiKey || '';
-  document.getElementById('cloud-auth-domain').value = config.authDomain || '';
-  document.getElementById('cloud-storage-bucket').value = config.storageBucket || '';
-  document.getElementById('cloud-messaging-sender-id').value = config.messagingSenderId || '';
-  document.getElementById('cloud-app-id').value = config.appId || '';
-  document.getElementById('cloud-toggle-enabled').checked = config.enabled !== false;
+  const provider = config.provider || (config.projectId ? 'firebase' : 'sheets');
 
+  // Populate Google Sheets
+  const elSheetsUrl = document.getElementById('cloud-sheets-url');
+  const elSheetsId = document.getElementById('cloud-sheets-id');
+  const elSheetsToken = document.getElementById('cloud-sheets-token');
+  if (elSheetsUrl) elSheetsUrl.value = config.sheetsUrl || '';
+  if (elSheetsId) elSheetsId.value = config.sheetsId || '';
+  if (elSheetsToken) elSheetsToken.value = config.sheetsToken || '';
+
+  // Populate MySQL
+  const elMysqlUrl = document.getElementById('cloud-mysql-endpoint');
+  const elMysqlKey = document.getElementById('cloud-mysql-apikey');
+  const elMysqlDb = document.getElementById('cloud-mysql-dbname');
+  if (elMysqlUrl) elMysqlUrl.value = config.mysqlApiUrl || '';
+  if (elMysqlKey) elMysqlKey.value = config.mysqlApiKey || '';
+  if (elMysqlDb) elMysqlDb.value = config.mysqlDbName || 'pos_db';
+
+  // Populate Firebase
+  const elProj = document.getElementById('cloud-project-id');
+  const elKey = document.getElementById('cloud-api-key');
+  const elAuth = document.getElementById('cloud-auth-domain');
+  const elBucket = document.getElementById('cloud-storage-bucket');
+  const elMsg = document.getElementById('cloud-messaging-sender-id');
+  const elApp = document.getElementById('cloud-app-id');
+  if (elProj) elProj.value = config.projectId || '';
+  if (elKey) elKey.value = config.apiKey || '';
+  if (elAuth) elAuth.value = config.authDomain || '';
+  if (elBucket) elBucket.value = config.storageBucket || '';
+  if (elMsg) elMsg.value = config.messagingSenderId || '';
+  if (elApp) elApp.value = config.appId || '';
+
+  const elToggle = document.getElementById('cloud-toggle-enabled');
+  if (elToggle) elToggle.checked = config.enabled !== false;
+
+  switchCloudProviderTab(provider);
   updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
   modal.classList.remove('hidden');
 }
@@ -1953,60 +2327,80 @@ function closeCloudSettingsModal() {
 
 async function saveCloudConfigHandler(e) {
   e.preventDefault();
+  const provider = document.getElementById('cloud-selected-provider')?.value || 'sheets';
+  const isEnabled = document.getElementById('cloud-toggle-enabled')?.checked ?? true;
+
   const config = {
-    projectId: document.getElementById('cloud-project-id').value.trim(),
-    apiKey: document.getElementById('cloud-api-key').value.trim(),
-    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
-    storageBucket: document.getElementById('cloud-storage-bucket').value.trim(),
-    messagingSenderId: document.getElementById('cloud-messaging-sender-id').value.trim(),
-    appId: document.getElementById('cloud-app-id').value.trim(),
-    enabled: document.getElementById('cloud-toggle-enabled').checked
+    provider,
+    enabled: isEnabled,
+    // Sheets
+    sheetsUrl: document.getElementById('cloud-sheets-url')?.value.trim() || '',
+    sheetsId: document.getElementById('cloud-sheets-id')?.value.trim() || '',
+    sheetsToken: document.getElementById('cloud-sheets-token')?.value.trim() || '',
+    // MySQL
+    mysqlApiUrl: document.getElementById('cloud-mysql-endpoint')?.value.trim() || '',
+    mysqlApiKey: document.getElementById('cloud-mysql-apikey')?.value.trim() || '',
+    mysqlDbName: document.getElementById('cloud-mysql-dbname')?.value.trim() || 'pos_db',
+    // Firebase
+    projectId: document.getElementById('cloud-project-id')?.value.trim() || '',
+    apiKey: document.getElementById('cloud-api-key')?.value.trim() || '',
+    authDomain: document.getElementById('cloud-auth-domain')?.value.trim() || '',
+    storageBucket: document.getElementById('cloud-storage-bucket')?.value.trim() || '',
+    messagingSenderId: document.getElementById('cloud-messaging-sender-id')?.value.trim() || '',
+    appId: document.getElementById('cloud-app-id')?.value.trim() || ''
   };
 
   CloudDB.saveConfig(config);
 
   if (!config.enabled) {
     CloudDB.disconnect();
-    showToast('Mode Cloud dinonaktifkan. Aplikasi berjalan secara offline lokal.', 'info');
+    showToast('Mode Database Eksternal dinonaktifkan. POS berjalan offline lokal.', 'info');
     closeCloudSettingsModal();
     return;
   }
 
-  showToast('Menghubungkan ke Firebase...', 'info');
+  const provName = CloudDB.getProviderName(provider);
+  showToast(`Menghubungkan ke ${provName}...`, 'info');
   const connected = await CloudDB.connect(config);
+
   if (connected) {
-    showToast('Berhasil terhubung ke Firebase Firestore!', 'success');
+    State.authSettings = await DB.getAuthSettings();
+    updateAuthUI();
+    showToast(`Berhasil terhubung ke ${provName}! Autentikasi Kasir & Admin aktif.`, 'success');
   } else {
-    showToast('Gagal terhubung. Silakan periksa Project ID dan API Key Anda.', 'error');
+    showToast(`Gagal terhubung ke ${provName}. Silakan periksa kredensial / URL Anda.`, 'error');
   }
 }
 
 async function testCloudConnectionHandler() {
+  const provider = document.getElementById('cloud-selected-provider')?.value || 'sheets';
   const config = {
-    projectId: document.getElementById('cloud-project-id').value.trim(),
-    apiKey: document.getElementById('cloud-api-key').value.trim(),
-    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
-    storageBucket: document.getElementById('cloud-storage-bucket').value.trim(),
-    messagingSenderId: document.getElementById('cloud-messaging-sender-id').value.trim(),
-    appId: document.getElementById('cloud-app-id').value.trim()
+    provider,
+    sheetsUrl: document.getElementById('cloud-sheets-url')?.value.trim() || '',
+    sheetsId: document.getElementById('cloud-sheets-id')?.value.trim() || '',
+    sheetsToken: document.getElementById('cloud-sheets-token')?.value.trim() || '',
+    mysqlApiUrl: document.getElementById('cloud-mysql-endpoint')?.value.trim() || '',
+    mysqlApiKey: document.getElementById('cloud-mysql-apikey')?.value.trim() || '',
+    mysqlDbName: document.getElementById('cloud-mysql-dbname')?.value.trim() || 'pos_db',
+    projectId: document.getElementById('cloud-project-id')?.value.trim() || '',
+    apiKey: document.getElementById('cloud-api-key')?.value.trim(),
+    authDomain: document.getElementById('cloud-auth-domain')?.value.trim(),
+    storageBucket: document.getElementById('cloud-storage-bucket')?.value.trim(),
+    messagingSenderId: document.getElementById('cloud-messaging-sender-id')?.value.trim(),
+    appId: document.getElementById('cloud-app-id')?.value.trim()
   };
-
-  if (!config.projectId || !config.apiKey) {
-    alert('Project ID dan API Key wajib diisi untuk melakukan test.');
-    return;
-  }
 
   const btn = document.getElementById('btn-test-cloud');
   const originalHtml = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Testing...';
+  btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Menguji...';
 
   try {
     const res = await CloudDB.testConnection(config);
-    alert(res.message || 'Koneksi ke Firebase Firestore Sukses!');
+    alert(res.message || `Koneksi ke ${CloudDB.getProviderName(provider)} Sukses!`);
   } catch (err) {
     console.error('Test connection error:', err);
-    alert('Koneksi Gagal: ' + (err.message || err.code || 'Periksa kredensial Firebase Anda.'));
+    alert('Koneksi Gagal: ' + (err.message || 'Periksa URL atau kredensial database Anda.'));
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
@@ -2014,8 +2408,8 @@ async function testCloudConnectionHandler() {
 }
 
 async function syncUploadAllHandler() {
-  if (!CloudDB.firestore) {
-    alert('Cloud belum terhubung. Harap simpan konfigurasi dan pastikan koneksi tersambung terlebih dahulu.');
+  if (CloudDB.status !== 'connected') {
+    alert('Database eksternal belum terhubung. Harap simpan konfigurasi dan pastikan koneksi tersambung terlebih dahulu.');
     return;
   }
 
@@ -2026,9 +2420,9 @@ async function syncUploadAllHandler() {
 
   try {
     const result = await CloudDB.uploadAllLocalData(DB);
-    showToast(`Berhasil upload: ${result.productsCount} produk, ${result.transactionsCount} transaksi!`, 'success');
+    showToast(`Berhasil upload ke ${CloudDB.getProviderName(CloudDB.provider)}: ${result.productsCount} produk, ${result.transactionsCount} transaksi, ${result.expensesCount} catatan!`, 'success');
   } catch (err) {
-    console.error('Upload to cloud error:', err);
+    console.error('Upload error:', err);
     alert('Gagal mengunggah data: ' + err.message);
   } finally {
     btn.disabled = false;
@@ -2037,12 +2431,12 @@ async function syncUploadAllHandler() {
 }
 
 async function syncDownloadAllHandler() {
-  if (!CloudDB.firestore) {
-    alert('Cloud belum terhubung. Harap simpan konfigurasi dan pastikan koneksi tersambung terlebih dahulu.');
+  if (CloudDB.status !== 'connected') {
+    alert('Database eksternal belum terhubung. Harap simpan konfigurasi dan pastikan koneksi tersambung terlebih dahulu.');
     return;
   }
 
-  const confirmed = confirm('Perhatian: Mengunduh data dari cloud akan menyinkronkan produk dan transaksi cloud ke memori perangkat ini. Lanjutkan?');
+  const confirmed = confirm(`Perhatian: Mengunduh data dari ${CloudDB.getProviderName(CloudDB.provider)} akan memperbarui produk, transaksi, dan catatan pengeluaran ke HP ini. Lanjutkan?`);
   if (!confirmed) return;
 
   const btn = document.getElementById('btn-sync-download');
@@ -2051,8 +2445,7 @@ async function syncDownloadAllHandler() {
   btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Mengunduh...';
 
   try {
-    const result = await CloudDB.downloadAllCloudData();
-    await DB.importFromCloud(result);
+    const result = await CloudDB.downloadAllCloudData(DB);
     await loadInitialData();
     if (State.activeView === 'cashier') {
       renderProducts();
@@ -2061,9 +2454,9 @@ async function syncDownloadAllHandler() {
     } else if (State.activeView === 'reports') {
       loadReportData();
     }
-    showToast(`Berhasil download: ${result.productsCount} produk, ${result.transactionsCount} transaksi!`, 'success');
+    showToast(`Berhasil download: ${result.productsCount} produk, ${result.transactionsCount} transaksi, ${result.expensesCount || 0} catatan!`, 'success');
   } catch (err) {
-    console.error('Download from cloud error:', err);
+    console.error('Download error:', err);
     alert('Gagal mengunduh data: ' + err.message);
   } finally {
     btn.disabled = false;
@@ -2142,6 +2535,7 @@ function updateStoreBrandingUI() {
 }
 
 function openStoreSwitcherModal() {
+  if (!requireAdmin(() => openStoreSwitcherModal())) return;
   const modal = document.getElementById('modal-store-switcher');
   if (!modal) return;
   renderStoreSwitcherList();
@@ -2352,6 +2746,7 @@ function switchReportTab(tab) {
 }
 
 function openExpenseModal(defaultType = 'operational') {
+  if (!requireAdmin(() => openExpenseModal(defaultType))) return;
   const modal = document.getElementById('modal-expense');
   if (!modal) return;
   const form = document.getElementById('form-expense');
@@ -2449,6 +2844,7 @@ async function saveExpenseHandler(e) {
 }
 
 async function deleteExpenseHandler(id) {
+  if (!requireAdmin(() => deleteExpenseHandler(id))) return;
   if (confirm("Apakah Anda yakin ingin menghapus catatan biaya ini?")) {
     try {
       await DB.deleteExpense(id);

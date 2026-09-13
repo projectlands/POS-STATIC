@@ -43,13 +43,17 @@ Dokumen ini adalah pedoman **WAJIB** untuk semua AI Agent (Antigravity, Cursor, 
 - **5 Produk Terlaris:** Menampilkan produk paling laku beserta progress bar persentase.
 - **Tabel Riwayat Transaksi Lengkap:** Menampilkan seluruh transaksi dengan tombol **"Lihat Struk"** untuk preview dan cetak ulang struk.
 
-### 4. Database Cloud (Firebase Firestore)
+### 4. Database Cloud & Remote (Google Spreadsheet, MySQL/MariaDB & Firebase)
 - Modul `cloud-db.js` tersambung secara modular tanpa merusak fungsionalitas offline lokal IndexedDB.
-- Mendukung sinkronisasi otomatis transaksi baru, test koneksi, upload manual, dan download manual seluruh data.
+- Mendukung 3 penyedia database:
+  1. **Google Spreadsheet:** Serverless gratis via Google Apps Script Web App (`google-sheets-script.js`).
+  2. **MySQL / MariaDB:** Self-hosted database melalui file REST API bridge (`api.php`).
+  3. **Firebase Firestore:** Database cloud realtime dari Google Firebase.
+- Mendukung sinkronisasi otomatis transaksi & pengeluaran baru, test koneksi, upload manual, dan download manual seluruh data.
 
 ### 5. Antarmuka Mobile (5-Tab & Drawer Menu)
 - Navigasi bawah 5-tab: Kasir, Keranjang (badge jumlah belanja), Produk, Laporan, Menu.
-- Bottom Sheet Drawer (`#modal-mobile-menu`) untuk akses cepat pengaturan toko, pindah POS toko, cloud, install PWA, dan reset data sampel.
+- Bottom Sheet Drawer (`#modal-mobile-menu`) untuk akses cepat ganti akun/peran, pengaturan toko, pindah POS toko, cloud, install PWA, dan reset data sampel.
 
 ### 6. Modul Keuangan, Buku Kas & Laba Rugi Riil (P&L & Balik Modal)
 - Sub-tab di halaman Laporan: `Analitik Penjualan` dan `Buku Kas & Laba Rugi Riil`.
@@ -59,12 +63,22 @@ Dokumen ini adalah pedoman **WAJIB** untuk semua AI Agent (Antigravity, Cursor, 
 - IndexedDB objectStore: `expenses` (CRUD lengkap per profil toko aktif).
 - Modal Input: `#modal-expense` dengan form kategori, nominal, tanggal, dan catatan.
 
+### 7. Otentikasi Peran Kasir & Admin (PIN Security)
+- **Otomatis Aktif:** Saat koneksi database eksternal aktif (Google Sheets, MySQL, atau Firebase), sistem mewajibkan autentikasi peran.
+- **Hak Akses Kasir:** Dibatasi hanya pada halaman Kasir (`#view-cashier`) dan Keranjang (`#view-cart`). Tidak bisa mengakses Produk, Laporan, Pengaturan Toko, Pindah Toko, Reset Data, atau Catatan Pengeluaran.
+- **Hak Akses Admin:** Akses penuh seluruh fitur toko.
+- **PIN Default:** Admin (`1234`), Kasir (`0000`).
+- **Modal Input PIN:** `#modal-auth-pin` dengan numeric touch keypad.
+- **Modal Ubah PIN:** `#modal-change-pin` untuk mengganti PIN Admin & Kasir kapan saja.
+
 ---
 
 ## 🛠️ STRUKTUR FILE
 - `index.html`: Struktur SPA (Single Page Application) lengkap dengan Tailwind CSS CDN & FontAwesome.
-- `app.js`: Logika UI, event listeners, keranjang belanja, kalkulasi struk, dan chart analitik.
-- `db.js`: Abstraksi database IndexedDB, multi-store manager, dan initial seed data.
-- `cloud-db.js`: Adapter sinkronisasi online Firebase Firestore.
+- `app.js`: Logika UI, keranjang, otentikasi peran (PIN Admin & Kasir), chart analitik, dan multi-db cloud UI.
+- `db.js`: Abstraksi database IndexedDB, multi-store manager, auth settings, dan initial seed data.
+- `cloud-db.js`: Multi-adapter database eksternal (Google Spreadsheet, MySQL REST API, Firebase Firestore).
+- `api.php`: REST API backend bridge untuk MySQL / MariaDB (auto-create table, secure key header).
+- `google-sheets-script.js`: Template Google Apps Script Web App untuk integrasi Google Spreadsheet.
 - `sw.js`: Service Worker untuk kapabilitas PWA offline penuh.
 - `manifest.json`: Konfigurasi installable Web App.
