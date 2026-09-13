@@ -212,11 +212,12 @@ const CloudDB = {
   async uploadAllLocalData(localDB) {
     if (!this.firestore) throw new Error('Cloud belum terhubung');
 
-    const [products, categories, transactions, storeInfo] = await Promise.all([
+    const [products, categories, transactions, storeInfo, expenses] = await Promise.all([
       localDB.getProducts(),
       localDB.getCategories(),
       localDB.getTransactions(),
-      localDB.getSettings('store_info')
+      localDB.getSettings('store_info'),
+      localDB.getExpenses ? localDB.getExpenses() : Promise.resolve([])
     ]);
 
     const batch = this.firestore.batch();
@@ -254,7 +255,17 @@ const CloudDB = {
       await commitBatchIfNeeded();
     }
 
-    // 4. Upload Store Info
+    // 4. Upload Expenses (Modal & Operasional)
+    if (expenses && expenses.length > 0) {
+      for (const e of expenses) {
+        const ref = this.firestore.collection('expenses').doc(String(e.id));
+        batch.set(ref, { ...e, _syncedAt: new Date().toISOString() }, { merge: true });
+        opCount++;
+        await commitBatchIfNeeded();
+      }
+    }
+
+    // 5. Upload Store Info
     if (storeInfo) {
       const ref = this.firestore.collection('settings').doc('store_info');
       batch.set(ref, { ...storeInfo, _syncedAt: new Date().toISOString() }, { merge: true });
@@ -268,7 +279,8 @@ const CloudDB = {
     return {
       productsCount: products.length,
       categoriesCount: categories.length,
-      transactionsCount: transactions.length
+      transactionsCount: transactions.length,
+      expensesCount: (expenses || []).length
     };
   },
 
@@ -276,16 +288,18 @@ const CloudDB = {
   async downloadAllCloudData(localDB) {
     if (!this.firestore) throw new Error('Cloud belum terhubung');
 
-    const [productsSnap, categoriesSnap, transactionsSnap, settingsSnap] = await Promise.all([
+    const [productsSnap, categoriesSnap, transactionsSnap, settingsSnap, expensesSnap] = await Promise.all([
       this.firestore.collection('products').get(),
       this.firestore.collection('categories').get(),
       this.firestore.collection('transactions').get(),
-      this.firestore.collection('settings').doc('store_info').get()
+      this.firestore.collection('settings').doc('store_info').get(),
+      this.firestore.collection('expenses').get()
     ]);
 
     let productsCount = 0;
     let categoriesCount = 0;
     let transactionsCount = 0;
+    let expensesCount = 0;
 
     // Simpan Produk ke IndexedDB
     for (const doc of productsSnap.docs) {
@@ -313,6 +327,17 @@ const CloudDB = {
       transactionsCount++;
     }
 
+    // Simpan Pengeluaran & Modal ke IndexedDB
+    for (const doc of expensesSnap.docs) {
+      const data = doc.data();
+      delete data._syncedAt;
+      if (data.id) data.id = Number(data.id) || data.id;
+      if (localDB.saveExpense) {
+        await localDB.saveExpense(data);
+        expensesCount++;
+      }
+    }
+
     // Simpan Pengaturan Toko jika ada
     if (settingsSnap.exists) {
       const storeInfo = settingsSnap.data();
@@ -320,6 +345,6 @@ const CloudDB = {
       await localDB.saveSettings('store_info', storeInfo);
     }
 
-    return { productsCount, categoriesCount, transactionsCount };
+    return { productsCount, categoriesCount, transactionsCount, expensesCount };
   }
 };

@@ -1359,6 +1359,9 @@ async function loadReportData() {
 
   // Render Sales Trend Chart (Canvas based)
   renderSalesTrendChart(filteredTx, dateStartStr, dateEndStr);
+
+  // Load Financial & Operational Expenses Report Data
+  await loadFinancialReportData(startTimestamp, endTimestamp, filteredTx);
 }
 
 function renderTransactionsHistoryTable(txList) {
@@ -2314,6 +2317,407 @@ async function saveSempolStockHandler(e) {
   closeSempolStockModal();
   showToast(`Stok Sempol berhasil diperbarui: ${stock} Tusuk (Modal: Rp ${unitCost}/tusuk)!`, 'success');
 }
+
+
+// ====================================================
+// FINANCIAL MANAGEMENT & REAL P&L (BUKU KAS & BIAYA)
+// ====================================================
+
+function switchReportTab(tab) {
+  const salesBtn = document.getElementById('btn-tab-report-sales');
+  const financeBtn = document.getElementById('btn-tab-report-finance');
+  const salesContent = document.getElementById('report-tab-sales-content');
+  const financeContent = document.getElementById('report-tab-finance-content');
+
+  if (tab === 'sales') {
+    salesContent?.classList.remove('hidden');
+    financeContent?.classList.add('hidden');
+    if (salesBtn) {
+      salesBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary-600 text-white shadow-glow-primary";
+    }
+    if (financeBtn) {
+      financeBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/50";
+    }
+  } else {
+    salesContent?.classList.add('hidden');
+    financeContent?.classList.remove('hidden');
+    if (financeBtn) {
+      financeBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-lg";
+    }
+    if (salesBtn) {
+      salesBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/50";
+    }
+    loadFinancialReportData();
+  }
+}
+
+function openExpenseModal(defaultType = 'operational') {
+  const modal = document.getElementById('modal-expense');
+  if (!modal) return;
+  const form = document.getElementById('form-expense');
+  if (form) form.reset();
+
+  const typeEl = document.getElementById('expense-type');
+  if (typeEl) typeEl.value = defaultType;
+
+  const dateEl = document.getElementById('expense-date');
+  if (dateEl) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateEl.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  onExpenseTypeChange();
+  modal.classList.remove('hidden');
+}
+
+function closeExpenseModal() {
+  const modal = document.getElementById('modal-expense');
+  if (modal) modal.classList.add('hidden');
+}
+
+function onExpenseTypeChange() {
+  const type = document.getElementById('expense-type')?.value;
+  const title = document.getElementById('expense-modal-title');
+  const sub = document.getElementById('expense-modal-subtitle');
+  const icon = document.getElementById('expense-modal-icon');
+  const iconBox = document.getElementById('expense-modal-icon-box');
+  const submitBtn = document.getElementById('btn-submit-expense');
+
+  if (type === 'capital') {
+    if (title) title.innerText = "Tambah Modal Awal / Usaha";
+    if (sub) sub.innerText = "Suntikan dana investasi atau kas laci";
+    if (icon) icon.className = "fa-solid fa-sack-dollar";
+    if (iconBox) iconBox.className = "w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400";
+    if (submitBtn) submitBtn.className = "px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-xs transition-colors shadow-lg flex items-center gap-1.5";
+  } else if (type === 'salary') {
+    if (title) title.innerText = "Catat Gaji / Upah Karyawan";
+    if (sub) sub.innerText = "Gaji bulanan, mingguan, atau upah harian kasir/karyawan";
+    if (icon) icon.className = "fa-solid fa-users";
+    if (iconBox) iconBox.className = "w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400";
+    if (submitBtn) submitBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-lg flex items-center gap-1.5";
+  } else if (type === 'packaging') {
+    if (title) title.innerText = "Bahan Tambahan & Kemasan";
+    if (sub) sub.innerText = "Minyak goreng, saus, cup plastik, plastik kresek, dll.";
+    if (icon) icon.className = "fa-solid fa-box-open";
+    if (iconBox) iconBox.className = "w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400";
+    if (submitBtn) submitBtn.className = "px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition-colors shadow-lg flex items-center gap-1.5";
+  } else {
+    if (title) title.innerText = "Catat Biaya Operasional";
+    if (sub) sub.innerText = "Sewa lapak, listrik, gas LPG, transport, dll.";
+    if (icon) icon.className = "fa-solid fa-receipt";
+    if (iconBox) iconBox.className = "w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400";
+    if (submitBtn) submitBtn.className = "px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs transition-colors shadow-lg flex items-center gap-1.5";
+  }
+}
+
+async function saveExpenseHandler(e) {
+  e.preventDefault();
+  const type = document.getElementById('expense-type').value;
+  const title = document.getElementById('expense-title').value.trim();
+  const amount = Number(document.getElementById('expense-amount').value) || 0;
+  const dateStr = document.getElementById('expense-date').value;
+  const note = document.getElementById('expense-note').value.trim();
+
+  if (!title || amount <= 0 || !dateStr) {
+    alert("Harap isi semua kolom wajib dengan benar!");
+    return;
+  }
+
+  const timestamp = parseLocalDate(dateStr, false);
+
+  const expenseItem = {
+    type,
+    title,
+    amount,
+    date: dateStr,
+    timestamp,
+    note
+  };
+
+  try {
+    await DB.saveExpense(expenseItem);
+    closeExpenseModal();
+    await loadFinancialReportData();
+    showToast(`Catatan "${title}" (Rp ${amount.toLocaleString('id-ID')}) berhasil disimpan!`, 'success');
+  } catch (err) {
+    console.error('Failed to save expense:', err);
+    alert('Gagal menyimpan catatan pengeluaran: ' + err.message);
+  }
+}
+
+async function deleteExpenseHandler(id) {
+  if (confirm("Apakah Anda yakin ingin menghapus catatan biaya ini?")) {
+    try {
+      await DB.deleteExpense(id);
+      await loadFinancialReportData();
+      showToast("Catatan pengeluaran berhasil dihapus!", 'info');
+    } catch (err) {
+      console.error('Failed to delete expense:', err);
+      alert('Gagal menghapus catatan: ' + err.message);
+    }
+  }
+}
+
+async function loadFinancialReportData(startTimestamp = null, endTimestamp = null, filteredTx = null) {
+  const dateStartStr = document.getElementById('filter-date-start')?.value;
+  const dateEndStr = document.getElementById('filter-date-end')?.value;
+
+  if (!startTimestamp && dateStartStr) {
+    startTimestamp = parseLocalDate(dateStartStr, false);
+  }
+  if (!endTimestamp && dateEndStr) {
+    endTimestamp = parseLocalDate(dateEndStr, true);
+  }
+
+  // Get transactions if not provided
+  if (!filteredTx) {
+    const allTransactions = await DB.getTransactions();
+    filteredTx = (startTimestamp && endTimestamp)
+      ? allTransactions.filter(tx => tx.timestamp >= startTimestamp && tx.timestamp <= endTimestamp)
+      : allTransactions;
+  }
+
+  // Calculate Sales Revenue and COGS (Cost of Goods Sold)
+  let revenue = 0;
+  let netSales = 0;
+  let cogs = 0;
+  filteredTx.forEach(tx => {
+    revenue += tx.total;
+    netSales += (tx.subtotal - (tx.discount || 0));
+    tx.items.forEach(item => {
+      cogs += (item.cost || 0) * item.quantity;
+    });
+  });
+  const grossProfit = netSales - cogs;
+
+  // Get all expenses from DB
+  const allExpenses = await DB.getExpenses();
+
+  // Filter expenses by date range
+  const filteredExpenses = (startTimestamp && endTimestamp)
+    ? allExpenses.filter(e => {
+        const t = e.timestamp || parseLocalDate(e.date, false);
+        return t >= startTimestamp && t <= endTimestamp;
+      })
+    : allExpenses;
+
+  // Sum expenses by category
+  let totalCapital = 0;
+  let salaries = 0;
+  let operational = 0;
+  let packaging = 0;
+  let other = 0;
+
+  // For Capital, we take cumulative all-time capital
+  allExpenses.forEach(e => {
+    if (e.type === 'capital') {
+      totalCapital += (e.amount || 0);
+    }
+  });
+
+  filteredExpenses.forEach(e => {
+    const amt = e.amount || 0;
+    if (e.type === 'salary') {
+      salaries += amt;
+    } else if (e.type === 'operational') {
+      operational += amt;
+    } else if (e.type === 'packaging') {
+      packaging += amt;
+    } else if (e.type === 'other') {
+      other += amt;
+    }
+  });
+
+  const totalOpex = salaries + operational + packaging + other;
+  const realNetProfit = grossProfit - totalOpex;
+
+  // Update Metric Cards
+  const elCapital = document.getElementById('fin-stat-capital');
+  if (elCapital) elCapital.innerText = `Rp ${totalCapital.toLocaleString('id-ID')}`;
+
+  const elOpex = document.getElementById('fin-stat-opex');
+  if (elOpex) elOpex.innerText = `Rp ${totalOpex.toLocaleString('id-ID')}`;
+
+  const elNetProfit = document.getElementById('fin-stat-net-profit');
+  if (elNetProfit) elNetProfit.innerText = `Rp ${realNetProfit.toLocaleString('id-ID')}`;
+
+  const elNetBadge = document.getElementById('fin-stat-net-badge');
+  if (elNetBadge) {
+    if (realNetProfit >= 0) {
+      elNetBadge.innerText = "Surplus Laba";
+      elNetBadge.className = "px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300";
+    } else {
+      elNetBadge.innerText = "Defisit Beban";
+      elNetBadge.className = "px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/20 text-rose-300";
+    }
+  }
+
+  // Break-even (Balik Modal) Analysis
+  const elBepStatus = document.getElementById('fin-stat-bep-status');
+  const elBepDiff = document.getElementById('fin-stat-bep-diff');
+  if (elBepStatus && elBepDiff) {
+    if (totalCapital === 0) {
+      elBepStatus.innerText = "Modal Belum Dicatat";
+      elBepStatus.className = "text-base font-bold text-slate-400";
+      elBepDiff.innerText = "Klik '+ Tambah Modal Usaha' di atas";
+    } else {
+      // Calculate all-time gross profit for BEP
+      const allTx = await DB.getTransactions();
+      let allGrossProfit = 0;
+      allTx.forEach(tx => {
+        let txCogs = 0;
+        tx.items.forEach(it => { txCogs += (it.cost || 0) * it.quantity; });
+        allGrossProfit += ((tx.subtotal - (tx.discount || 0)) - txCogs);
+      });
+
+      // All-time opex
+      let allOpex = 0;
+      allExpenses.forEach(e => {
+        if (e.type !== 'capital') allOpex += (e.amount || 0);
+      });
+
+      const netCashBalance = allGrossProfit - allOpex;
+      const bepDiff = netCashBalance - totalCapital;
+
+      if (bepDiff >= 0) {
+        elBepStatus.innerText = "SUDAH BALIK MODAL!";
+        elBepStatus.className = "text-base font-extrabold text-emerald-400";
+        elBepDiff.innerHTML = `Surplus Bersih: <strong class="text-white">Rp ${bepDiff.toLocaleString('id-ID')}</strong>`;
+      } else {
+        const remaining = Math.abs(bepDiff);
+        const percent = Math.min(100, Math.max(0, Math.round((Math.max(0, netCashBalance) / totalCapital) * 100)));
+        elBepStatus.innerText = `${percent}% Menuju BEP`;
+        elBepStatus.className = "text-base font-extrabold text-amber-400";
+        elBepDiff.innerHTML = `Kurang <strong class="text-rose-300">Rp ${remaining.toLocaleString('id-ID')}</strong> lagi untuk balik modal`;
+      }
+    }
+  }
+
+  // Update P&L Summary Box
+  const setPnl = (id, val, prefix = '') => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = `${prefix}Rp ${val.toLocaleString('id-ID')}`;
+  };
+  setPnl('pnl-revenue', revenue);
+  setPnl('pnl-cogs', cogs, '- ');
+  setPnl('pnl-gross-profit', grossProfit);
+  setPnl('pnl-salaries', salaries, '- ');
+  setPnl('pnl-operational', operational, '- ');
+  setPnl('pnl-packaging', packaging, '- ');
+  setPnl('pnl-other', other, '- ');
+  
+  const elPnlNet = document.getElementById('pnl-net-profit');
+  if (elPnlNet) {
+    elPnlNet.innerText = `Rp ${realNetProfit.toLocaleString('id-ID')}`;
+    elPnlNet.className = realNetProfit >= 0 ? "font-extrabold text-emerald-400" : "font-extrabold text-rose-400";
+  }
+
+  // Render Table & Mobile List
+  renderExpensesTable(filteredExpenses);
+}
+
+function renderExpensesTable(expenseList) {
+  const tbody = document.getElementById('expenses-table-body');
+  const mobList = document.getElementById('expenses-mobile-list');
+  if (!tbody) return;
+
+  const categoryFilter = document.getElementById('filter-expense-category')?.value || 'all';
+  const filtered = categoryFilter === 'all' 
+    ? expenseList 
+    : expenseList.filter(e => e.type === categoryFilter);
+
+  // Sort descending by date/timestamp
+  const sorted = filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  const getBadge = (type) => {
+    switch(type) {
+      case 'capital':
+        return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">Modal Usaha</span>';
+      case 'salary':
+        return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Gaji Karyawan</span>';
+      case 'packaging':
+        return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">Kemasan &amp; Bahan</span>';
+      case 'other':
+        return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/20 text-slate-400 border border-slate-500/30">Lain-lain</span>';
+      default:
+        return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">Operasional</span>';
+    }
+  };
+
+  // Desktop Table
+  if (sorted.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="p-8 text-center text-slate-500 font-semibold">
+          Belum ada catatan pengeluaran / modal pada periode ini
+        </td>
+      </tr>
+    `;
+  } else {
+    let html = '';
+    sorted.forEach(exp => {
+      const isCapital = exp.type === 'capital';
+      html += `
+        <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
+          <td class="p-3.5 pl-5 text-slate-400">${exp.date || '-'}</td>
+          <td class="p-3.5">${getBadge(exp.type)}</td>
+          <td class="p-3.5 font-bold text-white">${exp.title}</td>
+          <td class="p-3.5 text-slate-400 max-w-xs truncate">${exp.note || '-'}</td>
+          <td class="p-3.5 text-right font-bold ${isCapital ? 'text-sky-400' : 'text-rose-400'}">
+            ${isCapital ? '+' : '-'} Rp ${(exp.amount || 0).toLocaleString('id-ID')}
+          </td>
+          <td class="p-3.5 text-center pr-5">
+            <button onclick="deleteExpenseHandler(${exp.id})" class="p-1.5 text-slate-500 hover:text-danger-500 hover:bg-slate-800 rounded transition-colors" title="Hapus Catatan">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+    tbody.innerHTML = html;
+  }
+
+  // Mobile List
+  if (mobList) {
+    if (sorted.length === 0) {
+      mobList.innerHTML = `
+        <div class="py-6 text-center text-slate-500 font-semibold text-xs">
+          Belum ada catatan pengeluaran / modal
+        </div>
+      `;
+    } else {
+      let mHtml = '';
+      sorted.forEach(exp => {
+        const isCapital = exp.type === 'capital';
+        mHtml += `
+          <div class="py-3 flex items-center justify-between gap-3 animate-[fadeIn_0.15s_ease-out]">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                ${getBadge(exp.type)}
+                <span class="text-[10px] text-slate-500">${exp.date}</span>
+              </div>
+              <div class="font-bold text-slate-200 text-sm truncate">${exp.title}</div>
+              ${exp.note ? `<p class="text-[10px] text-slate-400 truncate">${exp.note}</p>` : ''}
+            </div>
+            <div class="flex items-center gap-3 flex-shrink-0">
+              <div class="text-right font-extrabold text-sm ${isCapital ? 'text-sky-400' : 'text-rose-400'}">
+                ${isCapital ? '+' : '-'} Rp ${(exp.amount || 0).toLocaleString('id-ID')}
+              </div>
+              <button onclick="deleteExpenseHandler(${exp.id})" class="p-2 text-slate-500 hover:text-danger-500 rounded">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      mobList.innerHTML = mHtml;
+    }
+  }
+}
+
 
 
 

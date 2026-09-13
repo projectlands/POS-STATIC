@@ -51,6 +51,14 @@ Dokumen ini adalah pedoman **WAJIB** untuk semua AI Agent (Antigravity, Cursor, 
 - Navigasi bawah 5-tab: Kasir, Keranjang (badge jumlah belanja), Produk, Laporan, Menu.
 - Bottom Sheet Drawer (`#modal-mobile-menu`) untuk akses cepat pengaturan toko, pindah POS toko, cloud, install PWA, dan reset data sampel.
 
+### 6. Modul Keuangan, Buku Kas & Laba Rugi Riil (P&L & Balik Modal)
+- Sub-tab di halaman Laporan: `Analitik Penjualan` dan `Buku Kas & Laba Rugi Riil`.
+- Menghitung modal awal usaha, beban operasional (sewa, listrik, gas, kemasan), dan gaji karyawan.
+- Menghitung **Laba Bersih Riil**: `Laba Kotor Penjualan - Beban Operasional & Gaji`.
+- Menghitung **Status Balik Modal (Break-Even Point)** secara realtime.
+- IndexedDB objectStore: `expenses` (CRUD lengkap per profil toko aktif).
+- Modal Input: `#modal-expense` dengan form kategori, nominal, tanggal, dan catatan.
+
 ---
 
 ## 🛠️ STRUKTUR FILE

@@ -483,7 +483,22 @@
       <div class="max-w-6xl mx-auto space-y-8">
         <!-- Filter bar -->
         <div class="flex justify-between items-center flex-wrap gap-4">
-          <h3 class="text-lg font-bold text-white">Dasbor Analitik</h3>
+          <div class="flex items-center gap-3">
+            <h3 class="text-lg font-bold text-white">Dasbor &amp; Laporan</h3>
+            <!-- Sub-Tab Switcher: Analitik Penjualan vs Buku Kas & Keuangan -->
+            <div class="flex items-center gap-1.5 p-1 bg-dark-900 border border-slate-800 rounded-xl">
+              <button id="btn-tab-report-sales" onclick="switchReportTab('sales')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary-600 text-white shadow-glow-primary">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>Analitik Penjualan</span>
+              </button>
+              <button id="btn-tab-report-finance" onclick="switchReportTab('finance')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/50">
+                <i class="fa-solid fa-wallet"></i>
+                <span>Buku Kas &amp; Laba Rugi Riil</span>
+                <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-extrabold uppercase">Baru</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Quick date filters -->
           <div class="flex gap-2">
             <input type="date" id="filter-date-start" class="bg-dark-900 border border-slate-800 rounded-lg text-sm px-3 py-1.5 text-slate-200 focus:outline-none focus:border-primary-500">
@@ -494,103 +509,274 @@
           </div>
         </div>
 
-        <!-- Metric widgets Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <!-- Widget 1: Revenue -->
-          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-            <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Pendapatan</span>
-              <h4 id="report-stat-revenue" class="text-xl font-bold text-white">Rp 0</h4>
+        <!-- TAB 1: ANALITIK PENJUALAN (100% PRESERVED FROM JULY 7) -->
+        <div id="report-tab-sales-content" class="space-y-8">
+          <!-- Metric widgets Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Widget 1: Revenue -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Pendapatan</span>
+                <h4 id="report-stat-revenue" class="text-xl font-bold text-white">Rp 0</h4>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-primary-600/10 text-primary-500 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-rupiah-sign"></i>
+              </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-primary-600/10 text-primary-500 flex items-center justify-center text-xl">
-              <i class="fa-solid fa-rupiah-sign"></i>
+
+            <!-- Widget 2: Net Profit -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Laba Penjualan (Kotor)</span>
+                <h4 id="report-stat-profit" class="text-xl font-bold text-success-500">Rp 0</h4>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-success-600/10 text-success-500 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-chart-line-up"></i>
+              </div>
+            </div>
+
+            <!-- Widget 3: Sales Count -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Transaksi</span>
+                <h4 id="report-stat-count" class="text-xl font-bold text-white">0</h4>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-indigo-600/10 text-indigo-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-receipt"></i>
+              </div>
+            </div>
+
+            <!-- Widget 4: Avg Bill -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rata-rata Nota</span>
+                <h4 id="report-stat-avg" class="text-xl font-bold text-white">Rp 0</h4>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-amber-600/10 text-amber-500 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-wallet"></i>
+              </div>
             </div>
           </div>
 
-          <!-- Widget 2: Net Profit -->
-          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-            <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Laba Bersih</span>
-              <h4 id="report-stat-profit" class="text-xl font-bold text-success-500">Rp 0</h4>
+          <!-- Charts and Top Sell Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Sales Trend Chart Card -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 lg:col-span-2 space-y-4">
+              <div class="flex justify-between items-center">
+                <h4 class="font-bold text-white text-sm">Grafik Penjualan Harian</h4>
+                <span class="text-xs text-slate-400">7 Hari Terakhir</span>
+              </div>
+              <!-- Canvas for Simple Chart rendering -->
+              <div class="relative h-64 w-full">
+                <canvas id="sales-trend-canvas" class="w-full h-full"></canvas>
+              </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-success-600/10 text-success-500 flex items-center justify-center text-xl">
-              <i class="fa-solid fa-chart-line-up"></i>
+
+            <!-- Top Selling Products Card -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h4 class="font-bold text-white text-sm">Produk Terlaris</h4>
+              <div id="top-products-list" class="space-y-3.5">
+                <!-- Dynamically Rendered Top Selling Products -->
+              </div>
             </div>
           </div>
 
-          <!-- Widget 3: Sales Count -->
-          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-            <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Transaksi</span>
-              <h4 id="report-stat-count" class="text-xl font-bold text-white">0</h4>
+          <!-- History of Transactions Table -->
+          <div class="bg-dark-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-slate-800">
+              <h4 class="font-bold text-white text-sm">Riwayat Transaksi Terkini</h4>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-indigo-600/10 text-indigo-400 flex items-center justify-center text-xl">
-              <i class="fa-solid fa-receipt"></i>
+            <!-- Desktop View Table -->
+            <div class="hidden md:block overflow-x-auto">
+              <table class="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase bg-slate-900/30">
+                    <th class="p-4 pl-6">ID Transaksi</th>
+                    <th class="p-4">Tanggal &amp; Waktu</th>
+                    <th class="p-4">Metode Bayar</th>
+                    <th class="p-4 text-right">Pajak/Diskon</th>
+                    <th class="p-4 text-right">Total Transaksi</th>
+                    <th class="p-4 text-right pr-6">Detail</th>
+                  </tr>
+                </thead>
+                <tbody id="transactions-table-body">
+                  <!-- Dynamically Rendered rows -->
+                </tbody>
+              </table>
             </div>
-          </div>
 
-          <!-- Widget 4: Avg Bill -->
-          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-            <div class="space-y-1">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rata-rata Nota</span>
-              <h4 id="report-stat-avg" class="text-xl font-bold text-white">Rp 0</h4>
-            </div>
-            <div class="w-12 h-12 rounded-xl bg-amber-600/10 text-amber-500 flex items-center justify-center text-xl">
-              <i class="fa-solid fa-wallet"></i>
+            <!-- Mobile View List -->
+            <div id="transactions-mobile-list" class="block md:hidden divide-y divide-slate-800/60 p-4 space-y-4">
+              <!-- Dynamically Rendered on Mobile -->
             </div>
           </div>
         </div>
 
-        <!-- Charts and Top Sell Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <!-- Sales Trend Chart Card -->
-          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 lg:col-span-2 space-y-4">
-            <div class="flex justify-between items-center">
-              <h4 class="font-bold text-white text-sm">Grafik Penjualan Harian</h4>
-              <span class="text-xs text-slate-400">7 Hari Terakhir</span>
+        <!-- TAB 2: BUKU KAS & LABA RUGI RIIL (FINANCE & OPERATIONAL EXPENSES) -->
+        <div id="report-tab-finance-content" class="hidden space-y-8 animate-[fadeIn_0.2s_ease-out]">
+          <!-- Action bar: Catat Biaya & Tambah Modal -->
+          <div class="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <i class="fa-solid fa-scale-balanced text-lg"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-white text-sm">Analisis Laba Bersih Riil &amp; Balik Modal</h4>
+                <p class="text-xs text-slate-400">Memperhitungkan modal awal, biaya operasional harian, dan gaji karyawan terhadap hasil penjualan</p>
+              </div>
             </div>
-            <!-- Canvas for Simple Chart rendering -->
-            <div class="relative h-64 w-full">
-              <canvas id="sales-trend-canvas" class="w-full h-full"></canvas>
+            <div class="flex items-center gap-2.5">
+              <button onclick="openExpenseModal('operational')" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
+                <i class="fa-solid fa-minus-circle"></i>
+                <span>Catat Pengeluaran / Beban</span>
+              </button>
+              <button onclick="openExpenseModal('capital')" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span>Tambah Modal Usaha</span>
+              </button>
             </div>
           </div>
 
-          <!-- Top Selling Products Card -->
-          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-            <h4 class="font-bold text-white text-sm">Produk Terlaris</h4>
-            <div id="top-products-list" class="space-y-3.5">
-              <!-- Dynamically Rendered Top Selling Products -->
+          <!-- 4 Financial Metric Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Card 1: Modal Awal / Investasi Masuk -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Modal Usaha</span>
+                <h4 id="fin-stat-capital" class="text-xl font-bold text-white">Rp 0</h4>
+                <p class="text-[11px] text-slate-400">Suntikan dana modal awal</p>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-sky-600/10 text-sky-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-sack-dollar"></i>
+              </div>
+            </div>
+
+            <!-- Card 2: Total Biaya Operasional & Gaji -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Beban Operasional &amp; Gaji</span>
+                <h4 id="fin-stat-opex" class="text-xl font-bold text-rose-400">Rp 0</h4>
+                <p class="text-[11px] text-slate-400" id="fin-stat-opex-desc">Sewa, listrik, kemasan &amp; gaji</p>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-rose-600/10 text-rose-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-money-bill-transfer"></i>
+              </div>
+            </div>
+
+            <!-- Card 3: Laba Bersih Riil (Setelah Operasional & Gaji) -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Laba Bersih Riil</span>
+                  <span id="fin-stat-net-badge" class="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300">Surplus</span>
+                </div>
+                <h4 id="fin-stat-net-profit" class="text-xl font-bold text-emerald-400">Rp 0</h4>
+                <p class="text-[11px] text-slate-400">Laba penjualan dikurangi beban</p>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-emerald-600/10 text-emerald-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-chart-line"></i>
+              </div>
+            </div>
+
+            <!-- Card 4: Status Balik Modal (Break-Even Tracker) -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div class="space-y-1">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status Balik Modal</span>
+                <h4 id="fin-stat-bep-status" class="text-base md:text-lg font-bold text-amber-400">Menghitung...</h4>
+                <p class="text-[11px] text-slate-400" id="fin-stat-bep-diff">Selisih laba vs modal usaha</p>
+              </div>
+              <div class="w-12 h-12 rounded-xl bg-amber-600/10 text-amber-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-bullseye"></i>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- History of Transactions Table -->
-        <div class="bg-dark-900 border border-slate-800 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-slate-800">
-            <h4 class="font-bold text-white text-sm">Riwayat Transaksi Terkini</h4>
-          </div>
-          <!-- Desktop View Table -->
-          <div class="hidden md:block overflow-x-auto">
-            <table class="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase bg-slate-900/30">
-                  <th class="p-4 pl-6">ID Transaksi</th>
-                  <th class="p-4">Tanggal & Waktu</th>
-                  <th class="p-4">Metode Bayar</th>
-                  <th class="p-4 text-right">Pajak/Diskon</th>
-                  <th class="p-4 text-right">Total Transaksi</th>
-                  <th class="p-4 text-right pr-6">Detail</th>
-                </tr>
-              </thead>
-              <tbody id="transactions-table-body">
-                <!-- Dynamically Rendered rows -->
-              </tbody>
-            </table>
-          </div>
+          <!-- Breakdown Box & Ringkasan Laba Rugi -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: Ringkasan Format P&L (Laporan Laba Rugi Sederhana) -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                <i class="fa-solid fa-file-invoice-dollar text-primary-400"></i>
+                <span>Ringkasan Laba Rugi (P&amp;L)</span>
+              </h4>
+              <div class="space-y-2.5 text-xs">
+                <div class="flex justify-between py-1.5 border-b border-slate-800/80">
+                  <span class="text-slate-400">Total Penjualan (Omset):</span>
+                  <span class="font-bold text-white" id="pnl-revenue">Rp 0</span>
+                </div>
+                <div class="flex justify-between py-1.5 border-b border-slate-800/80">
+                  <span class="text-slate-400">Modal Pokok Produk (HPP/COGS):</span>
+                  <span class="font-bold text-slate-300" id="pnl-cogs">- Rp 0</span>
+                </div>
+                <div class="flex justify-between py-1.5 border-b border-slate-800 font-semibold bg-slate-950/40 px-2 rounded-lg">
+                  <span class="text-slate-300">Laba Kotor Penjualan:</span>
+                  <span class="font-bold text-emerald-400" id="pnl-gross-profit">Rp 0</span>
+                </div>
+                <div class="flex justify-between py-1.5 border-b border-slate-800/80">
+                  <span class="text-slate-400">Beban Gaji Karyawan:</span>
+                  <span class="font-bold text-rose-400" id="pnl-salaries">- Rp 0</span>
+                </div>
+                <div class="flex justify-between py-1.5 border-b border-slate-800/80">
+                  <span class="text-slate-400">Beban Operasional (Sewa/Gas/Listrik):</span>
+                  <span class="font-bold text-rose-400" id="pnl-operational">- Rp 0</span>
+                </div>
+                <div class="flex justify-between py-1.5 border-b border-slate-800/80">
+                  <span class="text-slate-400">Beban Kemasan &amp; Penunjang:</span>
+                  <span class="font-bold text-rose-400" id="pnl-packaging">- Rp 0</span>
+                </div>
+                <div class="flex justify-between py-1.5 border-b border-slate-800/80">
+                  <span class="text-slate-400">Beban Lain-lain / Tak Terduga:</span>
+                  <span class="font-bold text-rose-400" id="pnl-other">- Rp 0</span>
+                </div>
+                <div class="flex justify-between py-2 pt-3 border-t-2 border-slate-800 font-bold text-sm bg-slate-900 px-2 rounded-xl">
+                  <span class="text-white">Laba Bersih Riil:</span>
+                  <span class="font-extrabold text-emerald-400" id="pnl-net-profit">Rp 0</span>
+                </div>
+              </div>
+            </div>
 
-          <!-- Mobile View List -->
-          <div id="transactions-mobile-list" class="block md:hidden divide-y divide-slate-800/60 p-4 space-y-4">
-            <!-- Dynamically Rendered on Mobile -->
+            <!-- Right: Tabel Catatan Pengeluaran & Kas Masuk -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl overflow-hidden lg:col-span-2 flex flex-col">
+              <div class="p-5 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
+                <div>
+                  <h4 class="font-bold text-white text-sm">Buku Pengeluaran &amp; Kas Masuk</h4>
+                  <p class="text-xs text-slate-400">Daftar biaya operasional, gaji, dan modal yang dicatat</p>
+                </div>
+                <!-- Filter Category -->
+                <select id="filter-expense-category" onchange="loadFinancialReportData()" class="px-3 py-1.5 rounded-lg bg-dark-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-primary-500">
+                  <option value="all">Semua Kategori</option>
+                  <option value="capital">Modal Usaha</option>
+                  <option value="operational">Operasional (Sewa/Listrik/Gas)</option>
+                  <option value="salary">Gaji Karyawan</option>
+                  <option value="packaging">Kemasan &amp; Bahan Baku</option>
+                  <option value="other">Lainnya</option>
+                </select>
+              </div>
+
+              <!-- Desktop View Table -->
+              <div class="hidden md:block overflow-x-auto flex-grow">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="border-b border-slate-800 text-slate-400 uppercase bg-slate-900/40">
+                      <th class="p-3.5 pl-5">Tanggal</th>
+                      <th class="p-3.5">Kategori</th>
+                      <th class="p-3.5">Keterangan</th>
+                      <th class="p-3.5">Catatan</th>
+                      <th class="p-3.5 text-right">Nominal</th>
+                      <th class="p-3.5 text-center pr-5">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="expenses-table-body">
+                    <!-- Dynamically Rendered -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Mobile View List -->
+              <div id="expenses-mobile-list" class="block md:hidden divide-y divide-slate-800/60 p-4 space-y-3">
+                <!-- Dynamically Rendered -->
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1285,6 +1471,73 @@
         <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
           <button type="button" onclick="closeSempolStockModal()" class="px-4 py-2 border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-xs transition-colors">Batal</button>
           <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-dark-950 font-bold rounded-lg text-xs transition-colors">Simpan Stok</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CATAT PENGELUARAN / MODAL (FINANCIAL RECORD) -->
+  <div id="modal-expense" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-[fadeIn_0.2s_ease-out]">
+      <!-- Header -->
+      <div class="px-6 py-5 border-b border-slate-800 flex justify-between items-center bg-dark-950/60">
+        <div class="flex items-center gap-2.5">
+          <div id="expense-modal-icon-box" class="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+            <i id="expense-modal-icon" class="fa-solid fa-receipt"></i>
+          </div>
+          <div>
+            <h4 id="expense-modal-title" class="font-bold text-white text-base">Catat Pengeluaran &amp; Biaya</h4>
+            <p class="text-[11px] text-slate-400" id="expense-modal-subtitle">Beban operasional, gaji, atau modal</p>
+          </div>
+        </div>
+        <button onclick="closeExpenseModal()" class="text-slate-400 hover:text-white transition-colors p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Form -->
+      <form id="form-expense" onsubmit="saveExpenseHandler(event)" class="p-6 space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Jenis Transaksi *</label>
+          <select id="expense-type" required onchange="onExpenseTypeChange()" class="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-xs text-white">
+            <option value="operational">🏢 Biaya Operasional (Sewa, Listrik, Gas, Transport)</option>
+            <option value="salary">👥 Gaji / Upah Karyawan &amp; Kasir</option>
+            <option value="packaging">📦 Bahan Tambahan &amp; Kemasan (Minyak, Cup, Plastik, Saus)</option>
+            <option value="capital">💰 Modal Awal / Tambahan Modal Usaha</option>
+            <option value="other">📑 Biaya Lain-lain / Tak Terduga</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Keterangan / Nama Transaksi *</label>
+          <input type="text" id="expense-title" required placeholder="Contoh: Beli Minyak 2 Jerigen, Gaji Kasir Minggu 1" class="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-xs text-white placeholder-slate-600">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Nominal (Rp) *</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500 font-bold text-xs">Rp</span>
+              <input type="number" id="expense-amount" min="1" required placeholder="0" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-sm font-bold text-white placeholder-slate-600">
+            </div>
+          </div>
+          <div>
+            <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Tanggal *</label>
+            <input type="date" id="expense-date" required class="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-xs text-white">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-400 font-semibold uppercase tracking-wider mb-1.5">Catatan Tambahan (Opsional)</label>
+          <textarea id="expense-note" rows="2" placeholder="Catatan opsional..." class="w-full px-3.5 py-2 rounded-xl bg-dark-950 border border-slate-800 focus:outline-none focus:border-primary-500 text-xs text-white placeholder-slate-600 resize-none"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
+          <button type="button" onclick="closeExpenseModal()" class="px-4 py-2 border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-xs transition-colors">Batal</button>
+          <button type="submit" id="btn-submit-expense" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg text-xs transition-colors shadow-glow-primary flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Simpan Catatan</span>
+          </button>
         </div>
       </form>
     </div>

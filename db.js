@@ -1,6 +1,6 @@
 const STORE_REGISTRY_KEY = 'pos_stores_registry';
 const ACTIVE_STORE_KEY = 'pos_active_store_id';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const DEFAULT_STORES = [
   {
@@ -141,6 +141,14 @@ const DB = {
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' });
         }
+
+        // Expenses store (Modal Awal, Biaya Operasional, Gaji, dll)
+        if (!db.objectStoreNames.contains('expenses')) {
+          const expenseStore = db.createObjectStore('expenses', { keyPath: 'id', autoIncrement: true });
+          expenseStore.createIndex('timestamp', 'timestamp', { unique: false });
+          expenseStore.createIndex('type', 'type', { unique: false });
+          expenseStore.createIndex('category', 'category', { unique: false });
+        }
       };
     });
   },
@@ -272,8 +280,26 @@ const DB = {
     return this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
   },
 
+  // Expenses CRUD (Buku Kas & Pengeluaran)
+  getExpenses() {
+    return new Promise((resolve) => {
+      this.execute('expenses', 'readonly', (store) => store.getAll())
+        .then((res) => resolve(res || []))
+        .catch(() => resolve([]));
+    });
+  },
+
+  saveExpense(expense) {
+    if (!expense.timestamp) expense.timestamp = Date.now();
+    return this.execute('expenses', 'readwrite', (store) => store.put(expense));
+  },
+
+  deleteExpense(id) {
+    return this.execute('expenses', 'readwrite', (store) => store.delete(Number(id)));
+  },
+
   // Import data dari Cloud Firestore ke IndexedDB Lokal
-  async importFromCloud({ products, categories, transactions, storeInfo }) {
+  async importFromCloud({ products, categories, transactions, storeInfo, expenses }) {
     if (categories && categories.length > 0) {
       for (const cat of categories) {
         await this.execute('categories', 'readwrite', (store) => store.put(cat));
@@ -287,6 +313,11 @@ const DB = {
     if (transactions && transactions.length > 0) {
       for (const trx of transactions) {
         await this.execute('transactions', 'readwrite', (store) => store.put(trx));
+      }
+    }
+    if (expenses && expenses.length > 0) {
+      for (const exp of expenses) {
+        await this.execute('expenses', 'readwrite', (store) => store.put(exp));
       }
     }
     if (storeInfo) {
