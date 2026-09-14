@@ -997,6 +997,8 @@ async function submitTransaction() {
 }
 
 function renderReceipt(tx) {
+  State.currentReceiptTx = tx;
+
   const preview = document.getElementById('receipt-preview');
   const printArea = document.getElementById('print-area');
   const modal = document.getElementById('modal-receipt');
@@ -1030,11 +1032,12 @@ function renderReceipt(tx) {
   const addrLines = shopAddr.split(/\r?\n/).map(line => wrapAndCenter(line)).join('\n');
   const phoneLine = wrapAndCenter(`Telp: ${shopPhone}`);
   const footerLines = footer.split(/\r?\n/).map(line => wrapAndCenter(line)).join('\n');
+  const cashierName = State.currentUser?.name || "Administrator";
 
   const metadataLines = [
     formatReceiptLine("No Nota  :", tx.id, 40),
     formatReceiptLine("Tanggal  :", dateStr, 40),
-    formatReceiptLine("Kasir    :", "Administrator", 40)
+    formatReceiptLine("Kasir    :", cashierName, 40)
   ].join('\n');
 
   const summaryLines = [
@@ -1066,6 +1069,8 @@ ${changeLine}
 ${footerLines}
 ========================================`;
 
+  State.currentReceiptRaw = rawReceipt;
+
   const receiptHtml = `<pre class="whitespace-pre font-mono text-black leading-relaxed text-[11px]">${rawReceipt}</pre>`;
   
   if (preview) preview.innerHTML = receiptHtml;
@@ -1077,6 +1082,222 @@ ${footerLines}
 function closeReceiptModal() {
   document.getElementById('modal-receipt').classList.add('hidden');
   switchView('cashier');
+}
+
+// ----------------------------------------------------
+// CETAK STRUK DALAM BENTUK GAMBAR (CANVAS TO IMAGE)
+// ----------------------------------------------------
+
+function generateReceiptCanvas(tx) {
+  if (!tx) tx = State.currentReceiptTx;
+  if (!tx) {
+    showToast('Data transaksi tidak ditemukan.', 'error');
+    return null;
+  }
+
+  const rawReceipt = State.currentReceiptRaw || '';
+  const lines = rawReceipt ? rawReceipt.split(/\r?\n/) : [];
+  if (lines.length === 0) {
+    showToast('Format teks struk belum siap.', 'error');
+    return null;
+  }
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Dimensi kertas thermal: 420px (skala 2x Retina untuk kualitas gambar HD yang tajam)
+  const scale = 2;
+  const logicalWidth = 420;
+  const fontSize = 13;
+  const lineHeight = 21;
+  const paddingX = 24;
+  const paddingTop = 36;
+  const paddingBottom = 48;
+
+  const totalContentHeight = lines.length * lineHeight;
+  const logicalHeight = paddingTop + totalContentHeight + paddingBottom;
+
+  canvas.width = logicalWidth * scale;
+  canvas.height = logicalHeight * scale;
+  ctx.scale(scale, scale);
+
+  // Background putih thermal bersih
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+  // Efek potongan gerigi kertas di bagian atas
+  ctx.fillStyle = '#f8fafc';
+  const zigzag = 6;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  for (let x = 0; x < logicalWidth; x += zigzag * 2) {
+    ctx.lineTo(x + zigzag, zigzag);
+    ctx.lineTo(x + zigzag * 2, 0);
+  }
+  ctx.lineTo(logicalWidth, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Efek potongan gerigi kertas di bagian bawah
+  ctx.beginPath();
+  ctx.moveTo(0, logicalHeight);
+  for (let x = 0; x < logicalWidth; x += zigzag * 2) {
+    ctx.lineTo(x + zigzag, logicalHeight - zigzag);
+    ctx.lineTo(x + zigzag * 2, logicalHeight);
+  }
+  ctx.lineTo(logicalWidth, logicalHeight);
+  ctx.closePath();
+  ctx.fill();
+
+  // Setup Monospace Font agar 40 kolom sejajar sempurna
+  ctx.font = `${fontSize}px "Courier New", Courier, "Lucida Console", monospace`;
+  ctx.textBaseline = 'middle';
+
+  // Ukur lebar karakter monospace
+  const sampleWidth = ctx.measureText('M').width;
+  const blockWidth = 40 * sampleWidth;
+  const startX = Math.max(paddingX, Math.round((logicalWidth - blockWidth) / 2));
+
+  let currentY = paddingTop + Math.round(lineHeight / 2);
+
+  const doubleDiv = "========================================";
+  const singleDiv = "----------------------------------------";
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line === doubleDiv) {
+      // Garis ganda tegas
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(startX, currentY - 2.5);
+      ctx.lineTo(startX + blockWidth, currentY - 2.5);
+      ctx.moveTo(startX, currentY + 2.5);
+      ctx.lineTo(startX + blockWidth, currentY + 2.5);
+      ctx.stroke();
+    } else if (line === singleDiv) {
+      // Garis putus-putus pembatas
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(startX, currentY);
+      ctx.lineTo(startX + blockWidth, currentY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (line.startsWith('TOTAL')) {
+      // Baris TOTAL dicetak tebal
+      ctx.font = `bold ${fontSize + 1}px "Courier New", Courier, monospace`;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText(line, startX, currentY);
+      ctx.font = `${fontSize}px "Courier New", Courier, monospace`;
+    } else {
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText(line, startX, currentY);
+    }
+
+    currentY += lineHeight;
+  }
+
+  // Cap / Stamp "✓ L U N A S" hijau di bagian bawah struk
+  const stampY = currentY + 12;
+  ctx.save();
+  ctx.strokeStyle = '#16a34a';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(logicalWidth / 2 - 60, stampY - 12, 120, 24);
+  ctx.fillStyle = '#16a34a';
+  ctx.font = `bold 12px "Courier New", Courier, monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('✓ L U N A S', logicalWidth / 2, stampY);
+  ctx.restore();
+
+  return canvas;
+}
+
+function downloadReceiptImage() {
+  const tx = State.currentReceiptTx;
+  if (!tx) {
+    showToast('Data transaksi tidak ditemukan.', 'error');
+    return;
+  }
+
+  const canvas = generateReceiptCanvas(tx);
+  if (!canvas) return;
+
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      showToast('Gagal membuat file gambar struk.', 'error');
+      return;
+    }
+    const storeSlug = (State.storeInfo?.name || 'toko').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const filename = `struk-${storeSlug}-${tx.id}.png`;
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+    showToast('Gambar struk (.PNG) berhasil diunduh!', 'success');
+  }, 'image/png');
+}
+
+async function shareReceiptImage() {
+  const tx = State.currentReceiptTx;
+  if (!tx) {
+    showToast('Data transaksi tidak ditemukan.', 'error');
+    return;
+  }
+
+  const canvas = generateReceiptCanvas(tx);
+  if (!canvas) return;
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) {
+      showToast('Gagal memproses gambar struk.', 'error');
+      return;
+    }
+
+    const storeName = State.storeInfo?.name || 'Ruang Temu';
+    const filename = `struk-${tx.id}.png`;
+    const file = new File([blob], filename, { type: 'image/png' });
+
+    // Web Share API (HP Android & iOS untuk share gambar langsung ke WhatsApp)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: `Struk Transaksi ${tx.id}`,
+          text: `Halo, berikut struk belanja ${tx.id} dari ${storeName}. Terima kasih telah berbelanja!`
+        });
+        showToast('Struk berhasil dibagikan!', 'success');
+        return;
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.warn('Web share failed, fallback:', err);
+        } else {
+          return;
+        }
+      }
+    }
+
+    // Fallback: Unduh file gambar otomatis dan arahkan ke WhatsApp
+    downloadReceiptImage();
+    const message = encodeURIComponent(
+      `*STRUK TRANSAKSI - ${storeName.toUpperCase()}*\n` +
+      `No. Nota: ${tx.id}\n` +
+      `Waktu: ${new Date(tx.timestamp).toLocaleString('id-ID')}\n` +
+      `Total: Rp ${tx.total.toLocaleString('id-ID')}\n` +
+      `Status: LUNAS (${tx.paymentMethod})\n\n` +
+      `_Gambar struk telah otomatis tersimpan di galeri/download Anda. Anda dapat melampirkannya bersama pesan ini._\n` +
+      `Terima kasih telah berbelanja di ${storeName}!`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${message}`, '_blank');
+  }, 'image/png');
 }
 
 // ----------------------------------------------------

@@ -1178,14 +1178,28 @@
       </div>
 
       <!-- Footer Buttons -->
-      <div class="p-4 bg-slate-900/50 border-t border-slate-800 grid grid-cols-2 gap-3">
-        <button onclick="closeReceiptModal()" class="py-2.5 border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold rounded-lg text-sm transition-colors">
-          Tutup
-        </button>
-        <button onclick="window.print()" class="py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-sm transition-all flex items-center justify-center gap-2 shadow-glow-primary">
-          <i class="fa-solid fa-print"></i>
-          <span>Cetak Struk</span>
-        </button>
+      <div class="p-4 bg-slate-900/60 border-t border-slate-800 flex flex-col gap-2.5">
+        <!-- Row 1: Image Export & Share Buttons -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <button type="button" onclick="downloadReceiptImage()" id="btn-download-receipt-img" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs md:text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 active:scale-[0.98]" title="Download Struk sebagai Gambar PNG">
+            <i class="fa-solid fa-file-image text-sm"></i>
+            <span>Simpan Gambar</span>
+          </button>
+          <button type="button" onclick="shareReceiptImage()" id="btn-share-receipt-img" class="py-2.5 px-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-xs md:text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-950/40 active:scale-[0.98]" title="Bagikan Struk ke WhatsApp">
+            <i class="fa-brands fa-whatsapp text-sm"></i>
+            <span>Kirim Struk (WA)</span>
+          </button>
+        </div>
+        <!-- Row 2: Close & Thermal Print -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <button type="button" onclick="closeReceiptModal()" class="py-2.5 px-3 border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold rounded-xl text-xs md:text-sm transition-colors text-center">
+            Tutup
+          </button>
+          <button type="button" onclick="window.print()" class="py-2.5 px-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl text-xs md:text-sm transition-all flex items-center justify-center gap-2 shadow-glow-primary active:scale-[0.98]">
+            <i class="fa-solid fa-print text-sm"></i>
+            <span>Cetak Printer</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
