@@ -2076,9 +2076,6 @@ function requireAdmin(actionCallback) {
     openAuthModal('admin', actionCallback);
     return false;
   }
-  if (typeof actionCallback === 'function') {
-    actionCallback();
-  }
   return true;
 }
 
