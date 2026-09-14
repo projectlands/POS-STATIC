@@ -796,6 +796,10 @@ function openPaymentModal() {
   const modal = document.getElementById('modal-payment');
   modal.classList.remove('hidden');
 
+  // Reset scroll position to top
+  const modalBody = modal.querySelector('.overflow-y-auto');
+  if (modalBody) modalBody.scrollTop = 0;
+
   // Compute exact totals
   let subtotal = 0;
   State.cart.forEach(item => {

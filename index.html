@@ -2,8 +2,8 @@
 <html lang="id" class="dark">
 <head>
   <script>
-    // Force PWA Cache Busting on Version Upgrade (8.0)
-    const APP_VERSION = '8.0';
+    // Force PWA Cache Busting on Version Upgrade (8.1)
+    const APP_VERSION = '8.1';
     if (localStorage.getItem('app_version') !== APP_VERSION) {
       localStorage.setItem('app_version', APP_VERSION);
       if ('serviceWorker' in navigator) {
@@ -1081,10 +1081,10 @@
   </div>
 
   <!-- MODAL: CHECKOUT / PAYMENT -->
-  <div id="modal-payment" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-dark-900 border border-slate-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-[fadeIn_0.2s_ease-out]">
+  <div id="modal-payment" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 pb-20 md:pb-4 overflow-y-auto">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] md:max-h-[90vh] my-auto animate-[fadeIn_0.2s_ease-out]">
       <!-- Header -->
-      <div class="px-6 py-5 border-b border-slate-800 flex justify-between items-center">
+      <div class="px-5 py-4 sm:px-6 sm:py-5 border-b border-slate-800 flex justify-between items-center flex-shrink-0 bg-dark-900">
         <h4 class="font-bold text-white text-lg flex items-center gap-2">
           <i class="fa-solid fa-money-bill-transfer text-primary-500"></i>
           <span>Metode & Jumlah Pembayaran</span>
@@ -1095,7 +1095,7 @@
       </div>
 
       <!-- Body -->
-      <div class="p-6 grid grid-cols-1 md:grid-cols-5 gap-6">
+      <div class="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-5 gap-5 sm:gap-6 overflow-y-auto flex-1 overscroll-contain">
         <!-- Left: Methods & Bill Info -->
         <div class="md:col-span-3 space-y-5">
           <!-- Total Tagihan -->
@@ -1181,7 +1181,7 @@
             </div>
           </div>
 
-          <button onclick="submitTransaction()" id="btn-submit-payment" class="w-full mt-6 py-4 bg-success-600 hover:bg-success-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-base shadow-glow-success">
+          <button onclick="submitTransaction()" id="btn-submit-payment" class="w-full mt-6 mb-2 py-4 bg-success-600 hover:bg-success-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-base shadow-glow-success active:scale-[0.98]">
             <i class="fa-solid fa-circle-check"></i>
             <span>Selesaikan Transaksi</span>
           </button>
@@ -1191,10 +1191,10 @@
   </div>
 
   <!-- MODAL: PRINT RECEIPT PREVIEW -->
-  <div id="modal-receipt" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-dark-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-[fadeIn_0.2s_ease-out]">
+  <div id="modal-receipt" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 pb-20 md:pb-4 overflow-y-auto">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] md:max-h-[90vh] my-auto animate-[fadeIn_0.2s_ease-out]">
       <!-- Header -->
-      <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+      <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center flex-shrink-0 bg-dark-900">
         <h4 class="font-bold text-white text-base">Detail Struk Kasir</h4>
         <button onclick="closeReceiptModal()" class="text-slate-400 hover:text-white transition-colors">
           <i class="fa-solid fa-xmark text-lg"></i>
@@ -1202,14 +1202,14 @@
       </div>
 
       <!-- Receipt Body (Screen Preview) -->
-      <div class="p-4 sm:p-6 bg-slate-950 flex justify-center">
+      <div class="p-4 sm:p-6 bg-slate-950 flex justify-center flex-1 overflow-y-auto">
         <div id="receipt-preview" class="w-full max-w-[350px] bg-white text-black p-4 sm:p-5 rounded-md shadow-2xl border border-slate-200 font-mono text-xs overflow-x-auto overflow-y-auto max-h-[380px]">
           <!-- Receipt Template (Rendered Dynamically) -->
         </div>
       </div>
 
       <!-- Footer Buttons -->
-      <div class="p-4 bg-slate-900/60 border-t border-slate-800 flex flex-col gap-2.5">
+      <div class="p-4 bg-slate-900/60 border-t border-slate-800 flex flex-col gap-2.5 flex-shrink-0">
         <!-- Row 1: Image Export & Share Buttons -->
         <div class="grid grid-cols-2 gap-2.5">
           <button type="button" onclick="downloadReceiptImage()" id="btn-download-receipt-img" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs md:text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 active:scale-[0.98]" title="Download Struk sebagai Gambar PNG">
