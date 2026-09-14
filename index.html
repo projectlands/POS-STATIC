@@ -165,17 +165,17 @@
 <body class="bg-dark-950 text-slate-200 font-sans h-screen h-[100dvh] flex overflow-hidden">
 
   <!-- Sidebar Navigasi -->
-  <aside class="hidden md:flex w-64 bg-dark-900 border-r border-slate-800 flex-col justify-between flex-shrink-0 z-20">
+  <aside id="app-sidebar" class="hidden md:flex w-64 bg-dark-900 border-r border-slate-800 flex-col justify-between flex-shrink-0 z-20">
     <div>
       <!-- Header / Logo (Clickable for Store Switcher) -->
-      <div onclick="openStoreSwitcherModal()" class="h-20 flex items-center px-6 border-b border-slate-800 gap-3 cursor-pointer hover:bg-slate-800/40 transition-colors" title="Klik untuk Ganti Toko / POS">
+      <div id="sidebar-store-box" onclick="openStoreSwitcherModal()" class="h-20 flex items-center px-6 border-b border-slate-800 gap-3 cursor-pointer hover:bg-slate-800/40 transition-colors" title="Klik untuk Ganti Toko / POS">
         <div id="sidebar-store-icon-box" class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white shadow-glow-primary flex-shrink-0">
           <i id="sidebar-store-icon" class="fa-solid fa-cash-register text-lg"></i>
         </div>
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <h1 class="font-bold text-sm md:text-base text-white leading-tight truncate" id="sidebar-store-name">Ruang Temu</h1>
-            <i class="fa-solid fa-repeat text-[10px] text-slate-400"></i>
+            <i id="sidebar-store-switch-icon" class="fa-solid fa-repeat text-[10px] text-slate-400"></i>
           </div>
           <span class="text-[11px] text-slate-400 block truncate" id="sidebar-store-tagline">Point of Sale</span>
         </div>
@@ -183,33 +183,38 @@
 
       <!-- Menu Items -->
       <nav class="p-4 space-y-2">
+        <!-- Kasir Menu (Available for both Kasir and Admin) -->
         <button id="btn-nav-cashier" onclick="switchView('cashier')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary">
           <i class="fa-solid fa-cash-register text-lg"></i>
           <span>Mesin Kasir</span>
         </button>
-        <button id="btn-nav-products" onclick="switchView('products')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
-          <i class="fa-solid fa-box text-lg"></i>
-          <span>Kelola Produk</span>
-        </button>
-        <button id="btn-nav-reports" onclick="switchView('reports')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
-          <i class="fa-solid fa-chart-line text-lg"></i>
-          <span>Laporan Penjualan</span>
-        </button>
-        <button id="btn-nav-settings" onclick="openStoreSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
-          <i class="fa-solid fa-gears text-lg"></i>
-          <span>Pengaturan Toko</span>
-        </button>
-        <button id="btn-nav-cloud" onclick="openCloudSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
-          <i class="fa-solid fa-cloud text-lg text-sky-400"></i>
-          <span>Database Cloud</span>
-        </button>
+
+        <!-- Admin Only Menu Items -->
+        <div id="sidebar-admin-menu" class="space-y-2">
+          <button id="btn-nav-products" onclick="switchView('products')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
+            <i class="fa-solid fa-box text-lg"></i>
+            <span>Kelola Produk</span>
+          </button>
+          <button id="btn-nav-reports" onclick="switchView('reports')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
+            <i class="fa-solid fa-chart-line text-lg"></i>
+            <span>Laporan Penjualan</span>
+          </button>
+          <button id="btn-nav-settings" onclick="openStoreSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
+            <i class="fa-solid fa-gears text-lg"></i>
+            <span>Pengaturan Toko</span>
+          </button>
+          <button id="btn-nav-cloud" onclick="openCloudSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
+            <i class="fa-solid fa-cloud text-lg text-sky-400"></i>
+            <span>Database Cloud</span>
+          </button>
+        </div>
       </nav>
     </div>
 
     <!-- Sidebar Footer -->
-    <div class="p-4 border-t border-slate-800 space-y-3">
+    <div class="p-4 border-t border-slate-800 space-y-2.5">
       <!-- Status Cloud -->
-      <div class="flex items-center justify-between px-2 text-xs">
+      <div id="sidebar-cloud-sync-status" class="flex items-center justify-between px-2 text-xs">
         <span class="text-slate-400">Cloud Sync</span>
         <button onclick="openCloudSettingsModal()" id="cloud-status-badge" class="flex items-center gap-1.5 font-medium text-slate-400 hover:text-sky-400 transition-colors" title="Klik untuk Pengaturan Cloud">
           <span id="cloud-status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
@@ -225,6 +230,12 @@
         </span>
       </div>
 
+      <!-- Logout / Kunci Button -->
+      <button id="btn-sidebar-logout" onclick="logoutUser()" class="w-full flex items-center justify-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:border-rose-500/50 font-semibold text-xs py-2 px-3 rounded-lg transition-colors" title="Kunci POS dan kembali ke halaman login">
+        <i class="fa-solid fa-right-from-bracket"></i>
+        <span>Kunci / Keluar POS</span>
+      </button>
+
       <!-- PWA Install Button -->
       <button id="btn-install-pwa" class="hidden w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs py-2 px-3 rounded-lg transition-colors border border-slate-700/50">
         <i class="fa-solid fa-download"></i>
@@ -232,7 +243,7 @@
       </button>
 
       <!-- Copyright -->
-      <div class="text-[10px] text-center text-slate-500">
+      <div class="text-[10px] text-center text-slate-500 pt-1">
         &copy; 2026 POS Ruang Temu PWA
       </div>
     </div>
@@ -242,7 +253,7 @@
   <main class="flex-grow flex flex-col min-w-0 overflow-hidden bg-dark-950 pb-16 md:pb-0">
 
     <!-- Top Bar -->
-    <header class="h-16 md:h-20 bg-dark-900 border-b border-slate-800 flex items-center justify-between px-3 md:px-8 flex-shrink-0 z-10">
+    <header id="app-header" class="h-16 md:h-20 bg-dark-900 border-b border-slate-800 flex items-center justify-between px-3 md:px-8 flex-shrink-0 z-10">
       <div class="flex items-center gap-2 md:gap-4 min-w-0">
         <h2 id="view-title" class="text-base md:text-xl font-bold text-white truncate">Mesin Kasir</h2>
         <!-- Store Switcher Button -->
@@ -253,47 +264,140 @@
         </button>
         <!-- Clock / Time -->
         <span id="digital-clock" class="hidden sm:inline-block text-xs md:text-sm font-mono text-slate-400 bg-slate-800/40 px-2 py-0.5 md:px-3 md:py-1 rounded-md border border-slate-800">20:45:00</span>
-        <!-- Reset Button -->
-        <button onclick="resetDatabaseHandler()" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
-          <i class="fa-solid fa-arrows-rotate"></i>
-          <span class="hidden md:inline">Reset Sampel</span>
-        </button>
-        <!-- Settings Button -->
-        <button onclick="openStoreSettingsModal()" title="Pengaturan Toko" class="bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
-          <i class="fa-solid fa-gears"></i>
-          <span class="hidden md:inline">Pengaturan</span>
-        </button>
-        <!-- Cloud DB Button -->
-        <button onclick="openCloudSettingsModal()" id="btn-header-cloud" title="Database Cloud Firebase" class="bg-slate-800/60 hover:bg-sky-600/20 hover:text-sky-400 border border-slate-700/50 hover:border-sky-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1.5">
-          <i class="fa-solid fa-cloud text-sky-400"></i>
-          <span class="hidden sm:inline font-medium">Cloud</span>
-          <span id="cloud-header-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-        </button>
+        
+        <!-- Admin-Only Header Tools -->
+        <div id="header-admin-tools" class="flex items-center gap-1 md:gap-2">
+          <!-- Reset Button -->
+          <button onclick="resetDatabaseHandler()" id="btn-header-reset" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span class="hidden md:inline">Reset Sampel</span>
+          </button>
+          <!-- Settings Button -->
+          <button onclick="openStoreSettingsModal()" id="btn-header-settings" title="Pengaturan Toko" class="bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+            <i class="fa-solid fa-gears"></i>
+            <span class="hidden md:inline">Pengaturan</span>
+          </button>
+          <!-- Cloud DB Button -->
+          <button onclick="openCloudSettingsModal()" id="btn-header-cloud" title="Koneksi Database Eksternal" class="bg-slate-800/60 hover:bg-sky-600/20 hover:text-sky-400 border border-slate-700/50 hover:border-sky-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1.5">
+            <i class="fa-solid fa-cloud text-sky-400"></i>
+            <span class="hidden sm:inline font-medium">Database</span>
+            <span id="cloud-header-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+          </button>
+        </div>
       </div>
 
       <!-- Quick Scan Info & Scanner gun indicator & Profile -->
-      <div class="flex items-center gap-2 md:gap-4 flex-shrink-0">
+      <div class="flex items-center gap-2 md:gap-3 flex-shrink-0">
         <!-- Mobile Menu Trigger Button (Mobile Only) -->
-        <button onclick="openMobileMenuModal()" class="md:hidden flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/70 transition-colors" title="Buka Menu Lengkap">
+        <button id="btn-header-m-menu" onclick="openMobileMenuModal()" class="md:hidden flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/70 transition-colors" title="Buka Menu Lengkap">
           <i class="fa-solid fa-bars text-sm"></i>
         </button>
 
         <div class="hidden lg:flex items-center gap-2 bg-slate-800/40 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-400">
           <i class="fa-solid fa-barcode text-sm text-primary-500"></i>
-          <span>Scanner Gun: <strong class="text-success-500 font-normal">Aktif</strong> (Langsung scan)</span>
+          <span>Scanner Gun: <strong class="text-success-500 font-normal">Aktif</strong></span>
         </div>
-        <!-- Profile / Role Switcher -->
-        <button id="btn-header-profile" onclick="openAuthModal()" class="flex items-center gap-2.5 p-1.5 md:px-3 md:py-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/70 hover:border-primary-500/40 transition-all text-left group" title="Klik untuk Ganti Peran (Admin / Kasir)">
+
+        <!-- Profile / Role Badge -->
+        <div id="btn-header-profile" class="flex items-center gap-2 p-1 md:px-2.5 md:py-1 rounded-xl bg-slate-800/60 border border-slate-700/70 text-left">
           <div class="text-right hidden sm:block">
-            <div id="header-user-name" class="font-semibold text-xs text-white group-hover:text-primary-400 transition-colors">Admin / Owner</div>
-            <div id="header-user-role-badge" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-400 border border-primary-500/30 uppercase inline-block">Administrator</div>
+            <div id="header-user-name" class="font-semibold text-xs text-white">Kasir Utama</div>
+            <div id="header-user-role-badge" class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase inline-block">Kasir</div>
           </div>
-          <div id="header-user-avatar" class="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-primary-500/20 border border-primary-500/30 flex items-center justify-center text-primary-400 group-hover:bg-primary-500/30 transition-colors">
-            <i class="fa-solid fa-user-shield text-sm"></i>
+          <div id="header-user-avatar" class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <i class="fa-solid fa-cash-register text-sm"></i>
           </div>
+        </div>
+
+        <!-- Logout Button -->
+        <button id="btn-header-logout" onclick="logoutUser()" title="Keluar / Kunci POS" class="flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 hover:text-rose-300 transition-colors">
+          <i class="fa-solid fa-right-from-bracket text-sm"></i>
         </button>
       </div>
     </header>
+
+    <!-- VIEW 0: FULLSCREEN LOGIN / AUTH LOCK SCREEN -->
+    <section id="view-login" class="flex-grow flex items-center justify-center p-4 min-h-0 overflow-y-auto bg-gradient-to-b from-dark-950 via-dark-900 to-dark-950 animate-[fadeIn_0.2s_ease-out]">
+      <div class="w-full max-w-sm my-auto bg-dark-900/95 backdrop-blur-md border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center">
+        <!-- Store Identity Badge -->
+        <div class="flex flex-col items-center text-center mb-4">
+          <div id="login-store-icon-box" class="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white shadow-glow-primary mb-3">
+            <i id="login-store-icon" class="fa-solid fa-cash-register text-2xl"></i>
+          </div>
+          <div class="flex items-center justify-center gap-2">
+            <h1 id="login-store-name" class="font-black text-xl text-white">Ruang Temu</h1>
+            <button type="button" onclick="openStoreSwitcherModal()" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all font-bold flex items-center gap-1" title="Ganti Toko">
+              <i class="fa-solid fa-store"></i>
+              <span>Pindah Toko</span>
+            </button>
+          </div>
+          <p id="login-store-tagline" class="text-xs text-slate-400 mt-0.5">Point of Sale &amp; Kasir Pintar</p>
+        </div>
+
+        <!-- Role Selector Switcher Tabs -->
+        <div class="w-full grid grid-cols-2 gap-2 p-1.5 bg-dark-950 rounded-2xl border border-slate-800 mb-3.5">
+          <button type="button" onclick="selectLoginRole('cashier')" id="login-tab-cashier" class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-lg">
+            <i class="fa-solid fa-cash-register"></i>
+            <span>Kasir</span>
+          </button>
+          <button type="button" onclick="selectLoginRole('admin')" id="login-tab-admin" class="py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white">
+            <i class="fa-solid fa-user-shield"></i>
+            <span>Admin</span>
+          </button>
+        </div>
+
+        <!-- Prompt Label -->
+        <p id="login-prompt-label" class="text-xs text-slate-400 text-center mb-2.5">
+          Masukkan PIN 4 digit untuk masuk sebagai <span class="text-emerald-400 font-bold" id="login-target-role-name">Kasir</span>
+        </p>
+
+        <!-- 4 PIN Dots -->
+        <div class="flex items-center justify-center gap-3.5 my-2">
+          <div id="login-pin-dot-0" class="w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all"></div>
+          <div id="login-pin-dot-1" class="w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all"></div>
+          <div id="login-pin-dot-2" class="w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all"></div>
+          <div id="login-pin-dot-3" class="w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all"></div>
+        </div>
+
+        <!-- Hidden input for keyboard / barcode gun / numpad -->
+        <input type="password" id="login-pin-hidden-input" maxlength="4" class="sr-only" autofocus>
+
+        <!-- Error Feedback -->
+        <div id="login-error-msg" class="hidden text-xs text-rose-400 font-semibold mt-2 text-center flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <span id="login-error-text">PIN salah, silakan coba lagi</span>
+        </div>
+
+        <!-- Numeric Keypad -->
+        <div class="grid grid-cols-3 gap-2 w-full max-w-[270px] mt-3">
+          <button type="button" onclick="pressLoginKey('1')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">1</button>
+          <button type="button" onclick="pressLoginKey('2')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">2</button>
+          <button type="button" onclick="pressLoginKey('3')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">3</button>
+          <button type="button" onclick="pressLoginKey('4')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">4</button>
+          <button type="button" onclick="pressLoginKey('5')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">5</button>
+          <button type="button" onclick="pressLoginKey('6')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">6</button>
+          <button type="button" onclick="pressLoginKey('7')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">7</button>
+          <button type="button" onclick="pressLoginKey('8')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">8</button>
+          <button type="button" onclick="pressLoginKey('9')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">9</button>
+          <button type="button" onclick="clearLoginPin()" class="h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-rose-400 font-bold text-sm border border-slate-800 transition-all active:scale-95 flex items-center justify-center" title="Hapus">
+            <i class="fa-solid fa-delete-left text-base"></i>
+          </button>
+          <button type="button" onclick="pressLoginKey('0')" class="h-11 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg border border-slate-700/60 transition-all active:scale-95 shadow-sm">0</button>
+          <button type="button" onclick="submitLoginPin()" class="h-11 rounded-xl bg-primary-600 hover:bg-primary-500 active:bg-primary-700 text-white font-bold text-sm border border-primary-500 transition-all active:scale-95 shadow-glow-primary flex items-center justify-center" title="Masuk">
+            <i class="fa-solid fa-arrow-right text-base"></i>
+          </button>
+        </div>
+
+        <!-- Helper note & Direct Database setup button -->
+        <div class="mt-3.5 pt-3 border-t border-slate-800/80 w-full flex flex-col items-center gap-1.5 text-center text-[11px] text-slate-400">
+          <span>PIN Bawaan: <strong class="text-white">Admin (1234)</strong> / <strong class="text-white">Kasir (0000)</strong></span>
+          <button type="button" onclick="openCloudSettingsFromLogin()" class="text-sky-400 hover:text-sky-300 transition-colors font-semibold flex items-center gap-1.5 mt-0.5">
+            <i class="fa-solid fa-database"></i>
+            <span>⚙️ Pengaturan Database (Sheets / MySQL / Firebase)</span>
+          </button>
+        </div>
+      </div>
+    </section>
 
     <!-- VIEW 1: CASHIER -->
     <section id="view-cashier" class="flex-grow flex min-h-0">
@@ -1087,7 +1191,7 @@
   </div>
 
   <!-- Bottom Navigation Bar (Mobile Only) -->
-  <div class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-dark-900 border-t border-slate-800 flex justify-around items-center z-30 pb-safe px-1">
+  <div id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-dark-900 border-t border-slate-800 flex justify-around items-center z-30 pb-safe px-1">
     <button onclick="switchView('cashier')" id="btn-m-nav-cashier" class="flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative">
       <i class="fa-solid fa-cash-register text-base"></i>
       <span class="text-[9px] mt-1">Kasir</span>
@@ -1113,6 +1217,11 @@
         <span id="m-nav-menu-dot" class="w-1.5 h-1.5 rounded-full bg-sky-400 absolute -top-0.5 -right-1.5"></span>
       </div>
       <span class="text-[9px] mt-1 font-semibold">Menu</span>
+    </button>
+    <!-- Mobile Logout Button (Visible for Cashier) -->
+    <button onclick="logoutUser()" id="btn-m-nav-logout" class="hidden flex flex-col items-center justify-center flex-1 py-1 text-rose-400 hover:text-rose-300 transition-colors relative" title="Keluar / Kunci POS">
+      <i class="fa-solid fa-right-from-bracket text-base"></i>
+      <span class="text-[9px] mt-1 font-semibold">Keluar</span>
     </button>
   </div>
 
@@ -1355,7 +1464,7 @@
       <!-- Body / Menu Items Grid -->
       <div class="p-4 overflow-y-auto space-y-2.5">
         <!-- Fitur: Ganti Akun / Peran (Admin & Kasir) -->
-        <div onclick="closeMobileMenuModal(); openAuthModal();" class="p-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800/60 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+        <div id="m-menu-role-item" onclick="closeMobileMenuModal(); openAuthModal();" class="p-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800/60 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
           <div class="flex items-center gap-3.5 min-w-0">
             <div id="m-menu-role-avatar" class="w-11 h-11 rounded-xl bg-primary-500/20 border border-primary-500/40 flex items-center justify-center text-primary-400 flex-shrink-0">
               <i class="fa-solid fa-user-shield text-xl"></i>
@@ -1372,7 +1481,7 @@
         </div>
 
         <!-- Fitur: Pindah POS / Toko (Multi-Toko) -->
-        <div onclick="closeMobileMenuModal(); openStoreSwitcherModal();" class="p-3.5 rounded-2xl bg-amber-950/30 hover:bg-amber-950/50 border border-amber-500/40 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+        <div id="m-menu-store-item" onclick="closeMobileMenuModal(); openStoreSwitcherModal();" class="p-3.5 rounded-2xl bg-amber-950/30 hover:bg-amber-950/50 border border-amber-500/40 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
           <div class="flex items-center gap-3.5 min-w-0">
             <div class="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
               <i class="fa-solid fa-store text-xl"></i>
@@ -1389,17 +1498,17 @@
         </div>
 
         <!-- Fitur: Database Cloud Firebase -->
-        <div onclick="closeMobileMenuModal(); openCloudSettingsModal();" class="p-3.5 rounded-2xl bg-sky-950/30 hover:bg-sky-950/50 border border-sky-500/40 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+        <div id="m-menu-cloud-item" onclick="closeMobileMenuModal(); openCloudSettingsModal();" class="p-3.5 rounded-2xl bg-sky-950/30 hover:bg-sky-950/50 border border-sky-500/40 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
           <div class="flex items-center gap-3.5 min-w-0">
             <div class="w-11 h-11 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400 flex-shrink-0">
               <i class="fa-solid fa-cloud text-xl"></i>
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="font-bold text-sm text-white">Database Cloud</span>
+                <span class="font-bold text-sm text-white">Database Eksternal</span>
                 <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-sky-500/30 text-sky-300 border border-sky-500/40">Online</span>
               </div>
-              <p class="text-xs text-slate-400 truncate mt-0.5">Sinkronisasi data online Firestore</p>
+              <p class="text-xs text-slate-400 truncate mt-0.5">Google Sheets, MySQL &amp; Firestore</p>
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
@@ -1409,7 +1518,7 @@
         </div>
 
         <!-- Fitur: Pengaturan Toko & Struk -->
-        <div onclick="closeMobileMenuModal(); openStoreSettingsModal();" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+        <div id="m-menu-settings-item" onclick="closeMobileMenuModal(); openStoreSettingsModal();" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
           <div class="flex items-center gap-3.5 min-w-0">
             <div class="w-11 h-11 rounded-xl bg-primary-500/20 border border-primary-500/40 flex items-center justify-center text-primary-400 flex-shrink-0">
               <i class="fa-solid fa-gears text-xl"></i>
@@ -1437,7 +1546,7 @@
         </div>
 
         <!-- Fitur: Reset Data Sampel -->
-        <div onclick="closeMobileMenuModal(); resetDatabaseHandler();" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+        <div id="m-menu-reset-item" onclick="closeMobileMenuModal(); resetDatabaseHandler();" class="p-3.5 rounded-2xl bg-dark-950 hover:bg-slate-800/50 border border-slate-800 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
           <div class="flex items-center gap-3.5 min-w-0">
             <div class="w-11 h-11 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 flex-shrink-0">
               <i class="fa-solid fa-arrows-rotate text-xl"></i>
@@ -1448,6 +1557,20 @@
             </div>
           </div>
           <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+        </div>
+
+        <!-- Fitur: Keluar / Kunci POS -->
+        <div id="m-menu-logout-item" onclick="closeMobileMenuModal(); logoutUser();" class="p-3.5 rounded-2xl bg-rose-950/25 hover:bg-rose-950/45 border border-rose-500/30 flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.98]">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 flex-shrink-0">
+              <i class="fa-solid fa-right-from-bracket text-xl"></i>
+            </div>
+            <div class="min-w-0">
+              <span class="font-bold text-sm text-rose-300">Kunci / Keluar POS</span>
+              <p class="text-xs text-slate-400 truncate mt-0.5">Tutup sesi kasir dan kembali ke login</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-xs text-rose-500"></i>
         </div>
       </div>
 

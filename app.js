@@ -12,9 +12,11 @@ const State = {
   paymentMethod: 'Cash',
   cameraScanner: null,
   activeProductEdit: null,
-  currentUser: { role: 'admin', name: 'Admin / Owner' },
-  authSettings: { required: false, adminPin: '1234', cashierPin: '0000' },
+  currentUser: null, // null jika belum login, { role: 'admin'|'cashier', name: '...' } setelah login
+  authSettings: { required: true, adminPin: '1234', cashierPin: '0000' },
   authPendingAction: null,
+  loginTargetRole: 'cashier',
+  loginPinInput: '',
   targetAuthRole: 'admin',
   pinInput: ''
 };
@@ -36,7 +38,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize Routing & System Clock
   initClock();
   setupEventListeners();
-  switchView('cashier');
+  setupLoginKeypadListeners();
+
+  // Apply initial role permissions & view
+  applyRolePermissions();
+  if (State.currentUser) {
+    switchView('cashier');
+  } else {
+    switchView('login');
+  }
 
   // Load digital state indicators
   updateConnectionStatus();
@@ -145,13 +155,16 @@ async function loadInitialData() {
   // Load Auth / PIN Settings
   try {
     State.authSettings = await DB.getAuthSettings();
-    const savedRole = sessionStorage.getItem('pos_user_role');
-    if (savedRole === 'cashier' || (State.authSettings?.required && !savedRole)) {
-      State.currentUser = { role: 'cashier', name: 'Kasir Utama' };
+    const savedRole = sessionStorage.getItem('pos_active_role');
+    if (savedRole === 'cashier' || savedRole === 'admin') {
+      State.currentUser = {
+        role: savedRole,
+        name: savedRole === 'admin' ? 'Admin / Owner' : 'Kasir Utama'
+      };
     } else {
-      State.currentUser = { role: 'admin', name: 'Admin / Owner' };
+      State.currentUser = null; // Belum login, wajib masuk via layar login
     }
-    updateAuthUI();
+    applyRolePermissions();
   } catch (err) {
     console.warn('Failed to load auth settings:', err);
   }
@@ -192,6 +205,36 @@ function initClock() {
 
 // View switcher / Routing (SPA)
 function switchView(viewName) {
+  // Jika belum login dan mencoba membuka menu apa pun, arahkan ke layar login
+  if (!State.currentUser && viewName !== 'login') {
+    viewName = 'login';
+  }
+
+  // Handle Layar Login Fullscreen
+  const viewLogin = document.getElementById('view-login');
+  if (viewName === 'login') {
+    State.activeView = 'login';
+    if (viewLogin) {
+      viewLogin.classList.remove('hidden');
+      viewLogin.classList.add('flex');
+    }
+    document.getElementById('view-cashier')?.classList.add('hidden');
+    document.getElementById('view-products')?.classList.add('hidden');
+    document.getElementById('view-reports')?.classList.add('hidden');
+    applyRolePermissions();
+    clearLoginPin();
+    setTimeout(() => {
+      document.getElementById('login-pin-hidden-input')?.focus();
+    }, 150);
+    return;
+  }
+
+  // Jika bukan login, sembunyikan view-login
+  if (viewLogin) {
+    viewLogin.classList.add('hidden');
+    viewLogin.classList.remove('flex');
+  }
+
   // If desktop screen size and trying to open mobile cart view, redirect to cashier
   if (window.innerWidth >= 768 && viewName === 'cart') {
     viewName = 'cashier';
@@ -1883,8 +1926,255 @@ function wrapAndCenter(text, width = 40) {
 // AUTHENTICATION & ROLE MANAGEMENT (ADMIN & KASIR)
 // ====================================================
 
+function applyRolePermissions() {
+  const user = State.currentUser;
+  const isAuth = !!user;
+  const isAdmin = user?.role === 'admin';
+  const isCashier = user?.role === 'cashier';
+
+  const sidebar = document.getElementById('app-sidebar');
+  const header = document.getElementById('app-header');
+  const mobileNav = document.getElementById('mobile-nav');
+
+  // KONDISI 1: Belum Login -> Sembunyikan SEMUA menu (sidebar, header, mobile nav)
+  if (!isAuth) {
+    if (sidebar) sidebar.classList.add('!hidden');
+    if (header) header.classList.add('!hidden');
+    if (mobileNav) mobileNav.classList.add('!hidden');
+    return;
+  }
+
+  // Pengguna Sudah Login -> Munculkan header, sidebar desktop, dan mobile nav
+  if (sidebar) sidebar.classList.remove('!hidden');
+  if (header) header.classList.remove('!hidden');
+  if (mobileNav) mobileNav.classList.remove('!hidden');
+
+  // KONDISI 2: Role Kasir -> HANYA menu Kasir & Keranjang yang terlihat
+  const sidebarAdminMenu = document.getElementById('sidebar-admin-menu');
+  const sidebarCloudStatus = document.getElementById('sidebar-cloud-sync-status');
+  const sidebarStoreSwitchIcon = document.getElementById('sidebar-store-switch-icon');
+  const headerStoreSwitch = document.getElementById('btn-header-store-switch');
+  const headerAdminTools = document.getElementById('header-admin-tools');
+  const headerMobileMenuBtn = document.getElementById('btn-header-m-menu');
+  const mNavProducts = document.getElementById('btn-m-nav-products');
+  const mNavReports = document.getElementById('btn-m-nav-reports');
+  const mNavMenu = document.getElementById('btn-m-nav-menu');
+  const mNavLogout = document.getElementById('btn-m-nav-logout');
+
+  if (isCashier) {
+    // Sembunyikan seluruh menu admin di sidebar
+    if (sidebarAdminMenu) sidebarAdminMenu.classList.add('hidden');
+    if (sidebarCloudStatus) sidebarCloudStatus.classList.add('hidden');
+    if (sidebarStoreSwitchIcon) sidebarStoreSwitchIcon.classList.add('hidden');
+
+    // Header: Matikan switch toko & admin buttons
+    if (headerStoreSwitch) headerStoreSwitch.classList.add('hidden');
+    if (headerAdminTools) headerAdminTools.classList.add('hidden');
+    if (headerMobileMenuBtn) headerMobileMenuBtn.classList.add('hidden');
+
+    // Mobile Bottom Nav: Kasir HANYA melihat Kasir, Keranjang, dan tombol Keluar
+    if (mNavProducts) mNavProducts.classList.add('hidden');
+    if (mNavReports) mNavReports.classList.add('hidden');
+    if (mNavMenu) mNavMenu.classList.add('hidden');
+    if (mNavLogout) mNavLogout.classList.remove('hidden');
+  } else if (isAdmin) {
+    // KONDISI 3: Role Admin -> Tampilkan SEMUA fitur & menu lengkap
+    if (sidebarAdminMenu) sidebarAdminMenu.classList.remove('hidden');
+    if (sidebarCloudStatus) sidebarCloudStatus.classList.remove('hidden');
+    if (sidebarStoreSwitchIcon) sidebarStoreSwitchIcon.classList.remove('hidden');
+
+    if (headerStoreSwitch) headerStoreSwitch.classList.remove('hidden');
+    if (headerAdminTools) headerAdminTools.classList.remove('hidden');
+    if (headerMobileMenuBtn) headerMobileMenuBtn.classList.remove('hidden');
+
+    if (mNavProducts) mNavProducts.classList.remove('hidden');
+    if (mNavReports) mNavReports.classList.remove('hidden');
+    if (mNavMenu) mNavMenu.classList.remove('hidden');
+    if (mNavLogout) mNavLogout.classList.add('hidden');
+  }
+
+  // Drawer items role visibility
+  const mDrawerRole = document.getElementById('m-menu-role-item');
+  const mDrawerStore = document.getElementById('m-menu-store-item');
+  const mDrawerCloud = document.getElementById('m-menu-cloud-item');
+  const mDrawerSettings = document.getElementById('m-menu-settings-item');
+  const mDrawerReset = document.getElementById('m-menu-reset-item');
+
+  if (isCashier) {
+    if (mDrawerStore) mDrawerStore.classList.add('hidden');
+    if (mDrawerCloud) mDrawerCloud.classList.add('hidden');
+    if (mDrawerSettings) mDrawerSettings.classList.add('hidden');
+    if (mDrawerReset) mDrawerReset.classList.add('hidden');
+  } else {
+    if (mDrawerRole) mDrawerRole.classList.remove('hidden');
+    if (mDrawerStore) mDrawerStore.classList.remove('hidden');
+    if (mDrawerCloud) mDrawerCloud.classList.remove('hidden');
+    if (mDrawerSettings) mDrawerSettings.classList.remove('hidden');
+    if (mDrawerReset) mDrawerReset.classList.remove('hidden');
+  }
+
+  updateAuthUI();
+}
+
+// ----------------------------------------------------
+// FULLSCREEN LOGIN VIEW CONTROLS & NUMPAD
+// ----------------------------------------------------
+
+function selectLoginRole(role) {
+  State.loginTargetRole = role;
+  const tabCashier = document.getElementById('login-tab-cashier');
+  const tabAdmin = document.getElementById('login-tab-admin');
+  const targetLabel = document.getElementById('login-target-role-name');
+
+  if (role === 'cashier') {
+    if (tabCashier) {
+      tabCashier.className = "py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-lg";
+    }
+    if (tabAdmin) {
+      tabAdmin.className = "py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    }
+    if (targetLabel) {
+      targetLabel.innerText = "Kasir";
+      targetLabel.className = "text-emerald-400 font-bold";
+    }
+  } else {
+    if (tabAdmin) {
+      tabAdmin.className = "py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 bg-primary-600 text-white shadow-glow-primary";
+    }
+    if (tabCashier) {
+      tabCashier.className = "py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    }
+    if (targetLabel) {
+      targetLabel.innerText = "Administrator";
+      targetLabel.className = "text-primary-400 font-bold";
+    }
+  }
+
+  clearLoginPin();
+}
+
+function pressLoginKey(digit) {
+  if (State.loginPinInput.length < 4) {
+    State.loginPinInput += digit;
+    updateLoginPinDotsUI();
+    if (State.loginPinInput.length === 4) {
+      setTimeout(() => {
+        submitLoginPin();
+      }, 100);
+    }
+  }
+}
+
+function clearLoginPin() {
+  State.loginPinInput = '';
+  updateLoginPinDotsUI();
+  const hiddenInput = document.getElementById('login-pin-hidden-input');
+  if (hiddenInput) hiddenInput.value = '';
+  const errorEl = document.getElementById('login-error-msg');
+  if (errorEl) errorEl.classList.add('hidden');
+}
+
+function updateLoginPinDotsUI() {
+  const len = State.loginPinInput.length;
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById(`login-pin-dot-${i}`);
+    if (dot) {
+      if (i < len) {
+        dot.className = "w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 scale-110 transition-all";
+      } else {
+        dot.className = "w-3.5 h-3.5 rounded-full border-2 border-slate-600 bg-transparent transition-all";
+      }
+    }
+  }
+}
+
+function setupLoginKeypadListeners() {
+  const hiddenInput = document.getElementById('login-pin-hidden-input');
+  if (hiddenInput) {
+    hiddenInput.addEventListener('input', (e) => {
+      State.loginPinInput = e.target.value.replace(/\D/g, '').substring(0, 4);
+      updateLoginPinDotsUI();
+      if (State.loginPinInput.length === 4) {
+        submitLoginPin();
+      }
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (State.activeView === 'login') {
+      if (/^\d$/.test(e.key)) {
+        pressLoginKey(e.key);
+      } else if (e.key === 'Backspace') {
+        State.loginPinInput = State.loginPinInput.slice(0, -1);
+        updateLoginPinDotsUI();
+      } else if (e.key === 'Enter') {
+        submitLoginPin();
+      }
+    }
+  });
+}
+
+async function submitLoginPin() {
+  const enteredPin = State.loginPinInput;
+  const targetRole = State.loginTargetRole;
+  const errorEl = document.getElementById('login-error-msg');
+  const errorText = document.getElementById('login-error-text');
+
+  if (enteredPin.length !== 4) {
+    if (errorEl && errorText) {
+      errorText.innerText = "Masukkan 4 digit PIN!";
+      errorEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const validAdminPin = State.authSettings?.adminPin || '1234';
+  const validCashierPin = State.authSettings?.cashierPin || '0000';
+
+  let isValid = false;
+  if (targetRole === 'admin' && enteredPin === validAdminPin) {
+    isValid = true;
+    State.currentUser = { role: 'admin', name: 'Admin / Owner' };
+    sessionStorage.setItem('pos_active_role', 'admin');
+    sessionStorage.setItem('pos_user_role', 'admin');
+  } else if (targetRole === 'cashier' && (enteredPin === validCashierPin || enteredPin === validAdminPin)) {
+    isValid = true;
+    State.currentUser = { role: 'cashier', name: 'Kasir Utama' };
+    sessionStorage.setItem('pos_active_role', 'cashier');
+    sessionStorage.setItem('pos_user_role', 'cashier');
+  }
+
+  if (isValid) {
+    clearLoginPin();
+    applyRolePermissions();
+    switchView('cashier');
+    showToast(`Selamat datang, ${State.currentUser.name}!`, 'success');
+  } else {
+    if (errorEl && errorText) {
+      errorText.innerText = `PIN salah untuk ${targetRole === 'admin' ? 'Administrator' : 'Kasir'}. Coba lagi.`;
+      errorEl.classList.remove('hidden');
+    }
+    clearLoginPin();
+  }
+}
+
+function logoutUser() {
+  State.currentUser = null;
+  sessionStorage.removeItem('pos_active_role');
+  sessionStorage.removeItem('pos_user_role');
+  applyRolePermissions();
+  switchView('login');
+  showToast('Sesi ditutup. Silakan masukkan PIN untuk masuk.', 'info');
+}
+
+function openCloudSettingsFromLogin() {
+  openAuthModal('admin', () => {
+    openCloudSettingsModal();
+  });
+}
+
 function requireAdmin(actionCallback) {
-  if (State.currentUser?.role === 'cashier') {
+  if (!State.currentUser || State.currentUser.role === 'cashier') {
     showToast('Aksi ini memerlukan hak akses Administrator. Masukkan PIN Admin.', 'info');
     openAuthModal('admin', actionCallback);
     return false;
@@ -2077,15 +2367,18 @@ async function submitPinLogin() {
   if (targetRole === 'admin' && enteredPin === validAdminPin) {
     isValid = true;
     State.currentUser = { role: 'admin', name: 'Admin / Owner' };
+    sessionStorage.setItem('pos_active_role', 'admin');
     sessionStorage.setItem('pos_user_role', 'admin');
   } else if (targetRole === 'cashier' && (enteredPin === validCashierPin || enteredPin === validAdminPin)) {
     // Admin PIN can also unlock cashier mode
     isValid = true;
     State.currentUser = { role: 'cashier', name: 'Kasir Utama' };
+    sessionStorage.setItem('pos_active_role', 'cashier');
     sessionStorage.setItem('pos_user_role', 'cashier');
   }
 
   if (isValid) {
+    applyRolePermissions();
     updateAuthUI();
     const actionToRun = State.authPendingAction;
     closeAuthModal();
