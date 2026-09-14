@@ -1024,7 +1024,10 @@ function renderReceipt(tx) {
     // Right side: Subtotal
     const itemSubtotal = `Rp ${item.subtotal.toLocaleString('id-ID')}`;
     
-    itemsHtml += `${item.name}\n${formatReceiptLine(qtyPrice, itemSubtotal, 40)}\n`;
+    const nameLines = wrapTextLines(item.name, 40);
+    const formattedName = nameLines.length > 0 ? nameLines.join('\n') : item.name.substring(0, 40);
+
+    itemsHtml += `${formattedName}\n${formatReceiptLine(qtyPrice, itemSubtotal, 40)}\n`;
   });
 
   // Split, wrap, and dynamically center-align text lines for thermal roll layout (40 cols)
@@ -1071,7 +1074,7 @@ ${footerLines}
 
   State.currentReceiptRaw = rawReceipt;
 
-  const receiptHtml = `<pre class="whitespace-pre font-mono text-black leading-relaxed text-[11px]">${rawReceipt}</pre>`;
+  const receiptHtml = `<pre class="whitespace-pre font-mono text-black leading-relaxed text-[10.5px] sm:text-[11.5px] select-all">${rawReceipt}</pre>`;
   
   if (preview) preview.innerHTML = receiptHtml;
   if (printArea) printArea.innerHTML = receiptHtml;
@@ -1187,11 +1190,26 @@ function generateReceiptCanvas(tx) {
       ctx.stroke();
       ctx.setLineDash([]);
     } else if (line.startsWith('TOTAL')) {
-      // Baris TOTAL dicetak tebal
-      ctx.font = `bold ${fontSize + 1}px "Courier New", Courier, monospace`;
+      // Baris TOTAL: Teks 'TOTAL' di kiri, nominal di kanan dengan textAlign = 'right'
+      const match = line.match(/^TOTAL\s+(.*)$/);
+      const rightTotal = match ? match[1] : '';
+
+      ctx.save();
+      // Background highlight halus untuk TOTAL
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(startX - 2, currentY - Math.round(lineHeight / 2) + 1, blockWidth + 4, lineHeight - 2);
+
+      ctx.font = `bold ${fontSize}px "Courier New", Courier, monospace`;
       ctx.fillStyle = '#0f172a';
-      ctx.fillText(line, startX, currentY);
-      ctx.font = `${fontSize}px "Courier New", Courier, monospace`;
+      
+      // Label TOTAL di kiri
+      ctx.textAlign = 'left';
+      ctx.fillText('TOTAL', startX, currentY);
+
+      // Nominal TOTAL di kanan (tepat di tepi kanan struk, tidak akan pernah lewat batas nota)
+      ctx.textAlign = 'right';
+      ctx.fillText(rightTotal, startX + blockWidth, currentY);
+      ctx.restore();
     } else {
       ctx.fillStyle = '#1e293b';
       ctx.fillText(line, startX, currentY);
@@ -2002,14 +2020,45 @@ function parseLocalDate(dateStr, endOfDay = false) {
   return d.getTime();
 }
 
-// Format a single line of receipt with left-aligned and right-aligned text
+// Wrap text into multiple lines of at most `width` characters
+function wrapTextLines(text, width = 40) {
+  if (!text) return [];
+  const words = String(text).trim().split(/\s+/);
+  const lines = [];
+  let currentLine = '';
+  words.forEach(word => {
+    if ((currentLine + (currentLine ? ' ' : '') + word).length <= width) {
+      currentLine += (currentLine ? ' ' : '') + word;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+      while (currentLine.length > width) {
+        lines.push(currentLine.substring(0, width));
+        currentLine = currentLine.substring(width);
+      }
+    }
+  });
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
+// Format a single line of receipt with left-aligned and right-aligned text (strictly capped at width)
 function formatReceiptLine(left, right, width = 40) {
-  const leftStr = String(left);
-  const rightStr = String(right);
-  const spacesNeeded = width - leftStr.length - rightStr.length;
-  if (spacesNeeded <= 0) {
-    return leftStr + ' ' + rightStr;
+  let leftStr = String(left != null ? left : '');
+  let rightStr = String(right != null ? right : '');
+
+  // Right string is priority (nominal amount, values), cap if it exceeds width - 4
+  if (rightStr.length > width - 4) {
+    rightStr = rightStr.substring(0, width - 4);
   }
+
+  // Left string gets truncated if total length exceeds width
+  const maxLeftLen = width - rightStr.length - 1;
+  if (leftStr.length > maxLeftLen) {
+    leftStr = leftStr.substring(0, maxLeftLen);
+  }
+
+  const spacesNeeded = Math.max(1, width - leftStr.length - rightStr.length);
   return leftStr + ' '.repeat(spacesNeeded) + rightStr;
 }
 
