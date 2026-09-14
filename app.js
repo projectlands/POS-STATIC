@@ -1134,7 +1134,7 @@ function generateReceiptCanvas(tx) {
   const lineHeight = 21;
   const paddingX = 24;
   const paddingTop = 36;
-  const paddingBottom = 48;
+  const paddingBottom = 28;
 
   const totalContentHeight = lines.length * lineHeight;
   const logicalHeight = paddingTop + totalContentHeight + paddingBottom;
@@ -1237,18 +1237,6 @@ function generateReceiptCanvas(tx) {
     currentY += lineHeight;
   }
 
-  // Cap / Stamp "✓ L U N A S" hijau di bagian bawah struk
-  const stampY = currentY + 12;
-  ctx.save();
-  ctx.strokeStyle = '#16a34a';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(logicalWidth / 2 - 60, stampY - 12, 120, 24);
-  ctx.fillStyle = '#16a34a';
-  ctx.font = `bold 12px "Courier New", Courier, monospace`;
-  ctx.textAlign = 'center';
-  ctx.fillText('✓ L U N A S', logicalWidth / 2, stampY);
-  ctx.restore();
-
   return canvas;
 }
 
@@ -1329,7 +1317,7 @@ async function shareReceiptImage() {
       `No. Nota: ${tx.id}\n` +
       `Waktu: ${new Date(tx.timestamp).toLocaleString('id-ID')}\n` +
       `Total: Rp ${tx.total.toLocaleString('id-ID')}\n` +
-      `Status: LUNAS (${tx.paymentMethod})\n\n` +
+      `Pembayaran: ${tx.paymentMethod === 'Transfer' ? 'Transfer Bank' : tx.paymentMethod}\n\n` +
       `_Gambar struk telah otomatis tersimpan di galeri/download Anda. Anda dapat melampirkannya bersama pesan ini._\n` +
       `Terima kasih telah berbelanja di ${storeName}!`
     );
