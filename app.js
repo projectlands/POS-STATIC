@@ -836,29 +836,48 @@ function selectPaymentMethod(method) {
 
   const btnCash = document.getElementById('btn-pay-cash');
   const btnQris = document.getElementById('btn-pay-qris');
+  const btnTransfer = document.getElementById('btn-pay-transfer');
   const btnCard = document.getElementById('btn-pay-card');
-  const fields = document.getElementById('cash-payment-fields');
-  const fastCash = document.getElementById('fast-cash-container');
+
+  const fieldsCash = document.getElementById('cash-payment-fields');
+  const quickCashWrapper = document.getElementById('quick-cash-wrapper');
+  const infoTransfer = document.getElementById('transfer-payment-info');
+  const infoQris = document.getElementById('qris-payment-info');
+  const infoCard = document.getElementById('card-payment-info');
+
+  const allBtns = [
+    { btn: btnCash, id: 'Cash' },
+    { btn: btnQris, id: 'QRIS' },
+    { btn: btnTransfer, id: 'Transfer' },
+    { btn: btnCard, id: 'Card' }
+  ];
 
   // Reset stylings
-  [btnCash, btnQris, btnCard].forEach(btn => {
-    btn.className = "flex flex-col items-center justify-center p-3 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-400 font-bold text-sm gap-1.5 transition-all";
+  allBtns.forEach(item => {
+    if (item.btn) {
+      if (item.id === method) {
+        item.btn.className = "flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl border border-primary-500 bg-primary-600/15 text-white font-bold text-xs sm:text-sm gap-1.5 transition-all shadow-md shadow-primary-950/40 scale-[1.02]";
+      } else {
+        item.btn.className = "flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-400 font-bold text-xs sm:text-sm gap-1.5 transition-all";
+      }
+    }
   });
 
+  // Toggle info panels
+  if (infoTransfer) infoTransfer.classList.toggle('hidden', method !== 'Transfer');
+  if (infoQris) infoQris.classList.toggle('hidden', method !== 'QRIS');
+  if (infoCard) infoCard.classList.toggle('hidden', method !== 'Card');
+
   if (method === 'Cash') {
-    btnCash.className = "flex flex-col items-center justify-center p-3 rounded-xl border border-primary-500 bg-primary-600/10 text-white font-bold text-sm gap-1.5 transition-all shadow-md";
-    fields.classList.remove('hidden');
-    fastCash.classList.remove('hidden');
-    document.getElementById('input-cash-amount').value = '';
-    document.getElementById('payment-change-amount').innerText = 'Rp 0';
+    if (fieldsCash) fieldsCash.classList.remove('hidden');
+    if (quickCashWrapper) quickCashWrapper.classList.remove('hidden');
+    const cashInput = document.getElementById('input-cash-amount');
+    if (cashInput) cashInput.value = '';
+    const changeAmount = document.getElementById('payment-change-amount');
+    if (changeAmount) changeAmount.innerText = 'Rp 0';
   } else {
-    fields.classList.add('hidden');
-    // For card/qris, cash received equals the exact total bill
-    if (method === 'QRIS') {
-      btnQris.className = "flex flex-col items-center justify-center p-3 rounded-xl border border-primary-500 bg-primary-600/10 text-white font-bold text-sm gap-1.5 transition-all shadow-md";
-    } else {
-      btnCard.className = "flex flex-col items-center justify-center p-3 rounded-xl border border-primary-500 bg-primary-600/10 text-white font-bold text-sm gap-1.5 transition-all shadow-md";
-    }
+    if (fieldsCash) fieldsCash.classList.add('hidden');
+    if (quickCashWrapper) quickCashWrapper.classList.add('hidden');
   }
 }
 
@@ -1701,8 +1720,11 @@ function renderTransactionsHistoryTable(txList) {
           <td class="p-4 text-slate-400">${dateStr}</td>
           <td class="p-4 text-center">
             <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
-              tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400' : tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'
-            }">${tx.paymentMethod}</span>
+              tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400 border border-success-500/30' :
+              tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+              tx.paymentMethod === 'Transfer' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' :
+              'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+            }">${tx.paymentMethod === 'Transfer' ? 'TF Bank' : tx.paymentMethod}</span>
           </td>
           <td class="p-4 text-right text-slate-400">Rp ${(tx.taxSvc - tx.discount).toLocaleString('id-ID')}</td>
           <td class="p-4 text-right font-bold text-white">Rp ${tx.total.toLocaleString('id-ID')}</td>
@@ -1736,8 +1758,11 @@ function renderTransactionsHistoryTable(txList) {
               <div class="text-[10px] text-slate-400 flex items-center gap-2 mt-1">
                 <span>${dateStr}</span>
                 <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                  tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400' : tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'
-                }">${tx.paymentMethod}</span>
+                  tx.paymentMethod === 'Cash' ? 'bg-success-500/20 text-success-400 border border-success-500/30' :
+                  tx.paymentMethod === 'QRIS' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' :
+                  tx.paymentMethod === 'Transfer' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' :
+                  'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }">${tx.paymentMethod === 'Transfer' ? 'TF Bank' : tx.paymentMethod}</span>
               </div>
             </div>
             
