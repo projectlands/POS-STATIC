@@ -2823,12 +2823,125 @@ function updateStoreBrandingUI() {
     mIconBox.className = `w-10 h-10 rounded-xl bg-gradient-to-br ${store.badgeColor || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white shadow-glow-primary flex-shrink-0`;
   }
 
+  // Update Login Screen Branding
+  const loginStoreName = document.getElementById('login-store-name');
+  if (loginStoreName) loginStoreName.innerText = store.name;
+  const loginTagline = document.getElementById('login-store-tagline');
+  if (loginTagline) loginTagline.innerText = store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Point of Sale & Kasir Pintar');
+  const loginStoreIcon = document.getElementById('login-store-icon');
+  if (loginStoreIcon) loginStoreIcon.className = `fa-solid ${store.icon || 'fa-store'} text-2xl`;
+  const loginIconBox = document.getElementById('login-store-icon-box');
+  if (loginIconBox) {
+    loginIconBox.className = `w-14 h-14 rounded-2xl bg-gradient-to-br ${store.badgeColor || 'from-primary-500 to-purple-600'} flex items-center justify-center text-white shadow-glow-primary mb-3`;
+  }
+
   // Update sempol live quick bar
   updateSempolQuickBarUI();
 }
 
+// ====================================================
+// STORE SETTINGS & DATABASE RESET HANDLERS
+// ====================================================
+
+function openStoreSettingsModal() {
+  if (!requireAdmin(() => openStoreSettingsModal())) return;
+  const modal = document.getElementById('modal-store-settings');
+  if (!modal) return;
+
+  const nameInput = document.getElementById('setting-store-name');
+  const addrInput = document.getElementById('setting-store-address');
+  const phoneInput = document.getElementById('setting-store-phone');
+  const taxInput = document.getElementById('setting-store-tax');
+  const footerInput = document.getElementById('setting-store-footer');
+
+  if (State.storeInfo) {
+    if (nameInput) nameInput.value = State.storeInfo.name || '';
+    if (addrInput) addrInput.value = State.storeInfo.address || '';
+    if (phoneInput) phoneInput.value = State.storeInfo.phone || '';
+    if (taxInput) taxInput.value = typeof State.storeInfo.taxRate !== 'undefined' ? State.storeInfo.taxRate : 11;
+    if (footerInput) footerInput.value = State.storeInfo.receiptFooter || '';
+  } else {
+    if (nameInput) nameInput.value = 'Ruang Temu Gadget';
+    if (addrInput) addrInput.value = 'MTC Mall Lantai 2, Jakarta';
+    if (phoneInput) phoneInput.value = '0812-9876-5432';
+    if (taxInput) taxInput.value = 11;
+    if (footerInput) footerInput.value = 'Terima kasih atas kunjungan Anda!';
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeStoreSettingsModal() {
+  const modal = document.getElementById('modal-store-settings');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+async function saveStoreSettingsHandler(event) {
+  event.preventDefault();
+
+  const name = document.getElementById('setting-store-name')?.value || '';
+  const address = document.getElementById('setting-store-address')?.value || '';
+  const phone = document.getElementById('setting-store-phone')?.value || '';
+  const taxRate = parseFloat(document.getElementById('setting-store-tax')?.value || 0);
+  const receiptFooter = document.getElementById('setting-store-footer')?.value || '';
+
+  const newSettings = {
+    name,
+    address,
+    phone,
+    taxRate,
+    serviceCharge: State.storeInfo ? (State.storeInfo.serviceCharge ?? 0) : 0,
+    currency: 'IDR',
+    receiptFooter
+  };
+
+  try {
+    await DB.saveSettings('store_info', newSettings);
+    State.storeInfo = newSettings;
+    updateStoreBrandingUI();
+    closeStoreSettingsModal();
+    showToast("Pengaturan Toko berhasil disimpan!", 'success');
+  } catch (err) {
+    console.error('Failed to save settings:', err);
+    alert('Gagal menyimpan pengaturan toko.');
+  }
+}
+
+async function resetDatabaseHandler() {
+  if (!requireAdmin(() => resetDatabaseHandler())) return;
+  if (confirm("Apakah Anda yakin ingin menghapus semua data dan memulihkan data sampel elektronik? Tindakan ini akan menghapus semua produk kustom dan transaksi Anda.")) {
+    try {
+      if (DB.db) {
+        DB.db.close();
+      }
+      const req = indexedDB.deleteDatabase('pos_database');
+      req.onblocked = () => {
+        alert("Proses reset terhambat karena ada tab aplikasi POS lain yang masih terbuka. Harap tutup tab POS lainnya terlebih dahulu.");
+      };
+      req.onsuccess = () => {
+        showToast("Database berhasil di-reset!", 'success');
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
+      };
+      req.onerror = () => {
+        alert("Gagal menghapus database.");
+      };
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat meriset database.");
+    }
+  }
+}
+
 function openStoreSwitcherModal() {
-  if (!requireAdmin(() => openStoreSwitcherModal())) return;
+  if (State.currentUser?.role === 'cashier') {
+    showToast('Akses dibatasi untuk Kasir. Masukkan PIN Admin.', 'info');
+    openAuthModal('admin', () => openStoreSwitcherModal());
+    return;
+  }
   const modal = document.getElementById('modal-store-switcher');
   if (!modal) return;
   renderStoreSwitcherList();
