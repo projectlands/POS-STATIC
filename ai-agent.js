@@ -547,19 +547,19 @@ PANDUAN MENJAWAB:
       .replace(/>/g, '&gt;');
 
     // Headings
-    html = html.replace(/^### (.*$)/gim, '<h3 class="font-bold text-base text-white mt-2 mb-1.5 flex items-center gap-1.5">$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2 class="font-bold text-lg text-primary-400 mt-2 mb-2">$1</h2>');
+    html = html.replace(/^### (.*$)/gim, '<h3 class="font-bold text-xs sm:text-sm text-white mt-2 mb-1 flex items-center gap-1.5 flex-wrap">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 class="font-bold text-sm sm:text-base text-primary-400 mt-2 mb-1.5">$1</h2>');
 
     // Bold & Italics
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>');
     html = html.replace(/\*(.*?)\*/g, '<em class="text-slate-300 italic">$1</em>');
 
     // Bullet points
-    html = html.replace(/^\- (.*$)/gim, '<li class="ml-4 list-disc text-slate-300 my-0.5">$1</li>');
-    html = html.replace(/^([0-9]+)\. (.*$)/gim, '<li class="ml-4 list-decimal text-slate-300 my-0.5"><span class="font-semibold text-white">$1.</span> $2</li>');
+    html = html.replace(/^\- (.*$)/gim, '<li class="ml-3 sm:ml-4 list-disc text-slate-300 my-0.5 break-words">$1</li>');
+    html = html.replace(/^([0-9]+)\. (.*$)/gim, '<li class="ml-3 sm:ml-4 list-decimal text-slate-300 my-0.5 break-words"><span class="font-semibold text-white">$1.</span> $2</li>');
 
     // Paragraphs / line breaks
-    html = html.replace(/\n\n/g, '<div class="h-2"></div>');
+    html = html.replace(/\n\n/g, '<div class="h-1.5 sm:h-2"></div>');
     html = html.replace(/\n/g, '<br/>');
 
     return html;
@@ -573,14 +573,14 @@ PANDUAN MENJAWAB:
     container.innerHTML = this.messages.map(msg => {
       const isUser = msg.role === 'user';
       return `
-        <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'} mb-3">
-          <div class="flex items-end gap-2 max-w-[90%] md:max-w-[80%] ${isUser ? 'flex-row-reverse' : 'flex-row'}">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs flex-shrink-0 ${
+        <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'} mb-2.5 sm:mb-3">
+          <div class="flex items-end gap-1.5 sm:gap-2 max-w-[94%] sm:max-w-[85%] md:max-w-[80%] ${isUser ? 'flex-row-reverse' : 'flex-row'}">
+            <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center text-[10px] sm:text-xs flex-shrink-0 mb-0.5 ${
               isUser ? 'bg-primary-600 text-white' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-glow-primary'
             }">
               <i class="fa-solid ${isUser ? 'fa-user' : 'fa-robot'}"></i>
             </div>
-            <div class="p-3.5 rounded-2xl text-xs md:text-sm leading-relaxed ${
+            <div class="p-2.5 sm:p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed break-words overflow-x-auto ${
               isUser 
                 ? 'bg-primary-600 text-white rounded-br-sm shadow-md' 
                 : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 rounded-bl-sm shadow-lg'
@@ -588,7 +588,7 @@ PANDUAN MENJAWAB:
               ${isUser ? msg.text.replace(/\n/g, '<br/>') : this.formatMarkdown(msg.text)}
             </div>
           </div>
-          <span class="text-[10px] text-slate-500 mt-1 px-10">${msg.time || ''}</span>
+          <span class="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 ${isUser ? 'mr-7 sm:mr-9' : 'ml-7 sm:ml-9'}">${msg.time || ''}</span>
         </div>
       `;
     }).join('');
