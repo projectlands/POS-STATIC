@@ -1142,6 +1142,23 @@ ${footerLines}
   
   if (preview) preview.innerHTML = receiptHtml;
   if (printArea) printArea.innerHTML = receiptHtml;
+
+  // Atur status tombol batal transaksi di struk: disable jika sudah lewat 1 hari
+  const cancelBtn = document.getElementById('btn-receipt-cancel');
+  if (cancelBtn) {
+    const isExpired = isTransactionExpiredForCancel(tx);
+    if (isExpired) {
+      cancelBtn.disabled = true;
+      cancelBtn.className = "w-full py-2 px-3 bg-slate-800/40 text-slate-500 border border-slate-700/40 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 cursor-not-allowed opacity-60";
+      cancelBtn.innerHTML = '<i class="fa-solid fa-clock-rotate-left text-xs"></i> <span>Batal Tidak Tersedia (&gt; 1 Hari dari Transaksi)</span>';
+      cancelBtn.title = "Transaksi yang sudah lewat lebih dari 1 hari tidak dapat dibatalkan.";
+    } else {
+      cancelBtn.disabled = false;
+      cancelBtn.className = "w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold rounded-xl text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.98]";
+      cancelBtn.innerHTML = '<i class="fa-solid fa-ban text-xs"></i> <span>Batalkan / Hapus Transaksi Ini (Admin)</span>';
+      cancelBtn.title = "Batalkan / Hapus Transaksi (Khusus Admin)";
+    }
+  }
   
   modal.classList.remove('hidden');
 }
@@ -1731,6 +1748,15 @@ async function loadReportData() {
   }
 }
 
+function isTransactionExpiredForCancel(tx) {
+  if (!tx) return false;
+  const txTime = Number(tx.timestamp) || (tx.date ? new Date(tx.date).getTime() : 0);
+  if (!txTime) return false;
+  const now = Date.now();
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 jam (1 hari)
+  return (now - txTime) > ONE_DAY_MS;
+}
+
 function renderTransactionsHistoryTable(txList) {
   const tbody = document.getElementById('transactions-table-body');
   const mobList = document.getElementById('transactions-mobile-list');
@@ -1752,6 +1778,17 @@ function renderTransactionsHistoryTable(txList) {
     let html = '';
     sorted.forEach(tx => {
       const dateStr = new Date(tx.timestamp).toLocaleString('id-ID');
+      const isExpired = isTransactionExpiredForCancel(tx);
+      const cancelBtnDesktop = isExpired
+        ? `<button disabled class="text-xs text-slate-600 font-normal flex items-center gap-1 p-1 cursor-not-allowed opacity-40" title="Batal tidak tersedia (sudah lewat lebih dari 1 hari)">
+            <i class="fa-solid fa-ban text-[11px]"></i>
+            <span>Batal</span>
+          </button>`
+        : `<button onclick="cancelTransactionHandler('${tx.id}')" class="text-xs text-rose-400/80 hover:text-rose-400 font-semibold transition-colors flex items-center gap-1 p-1 hover:bg-rose-500/10 rounded" title="Batalkan / Hapus Transaksi (Khusus Admin)">
+            <i class="fa-solid fa-ban text-[11px]"></i>
+            <span>Batal</span>
+          </button>`;
+
       html += `
         <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
           <td class="p-4 pl-6 font-mono font-bold text-slate-300">
@@ -1775,10 +1812,7 @@ function renderTransactionsHistoryTable(txList) {
                 <i class="fa-solid fa-receipt text-[11px]"></i>
                 <span>Struk</span>
               </button>
-              <button onclick="cancelTransactionHandler('${tx.id}')" class="text-xs text-rose-400/80 hover:text-rose-400 font-semibold transition-colors flex items-center gap-1 p-1 hover:bg-rose-500/10 rounded" title="Batalkan / Hapus Transaksi (Khusus Admin)">
-                <i class="fa-solid fa-ban text-[11px]"></i>
-                <span>Batal</span>
-              </button>
+              ${cancelBtnDesktop}
             </div>
           </td>
         </tr>
@@ -1799,6 +1833,17 @@ function renderTransactionsHistoryTable(txList) {
       let mHtml = '';
       sorted.forEach(tx => {
         const dateStr = new Date(tx.timestamp).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+        const isExpired = isTransactionExpiredForCancel(tx);
+        const cancelBtnMobile = isExpired
+          ? `<button disabled class="text-[11px] text-slate-600 cursor-not-allowed flex items-center gap-0.5 opacity-40" title="Batal tidak tersedia (sudah lewat lebih dari 1 hari)">
+              <i class="fa-solid fa-ban text-[9px]"></i>
+              <span>Batal</span>
+            </button>`
+          : `<button onclick="cancelTransactionHandler('${tx.id}')" class="text-[11px] text-rose-400 font-semibold hover:underline flex items-center gap-0.5" title="Batalkan Transaksi (Admin)">
+              <i class="fa-solid fa-ban text-[9px]"></i>
+              <span>Batal</span>
+            </button>`;
+
         mHtml += `
           <div class="py-4 flex items-center justify-between gap-4 animate-[fadeIn_0.15s_ease-out]">
             <div class="min-w-0">
@@ -1823,10 +1868,7 @@ function renderTransactionsHistoryTable(txList) {
                     Struk
                   </button>
                   <span class="text-slate-600 text-xs">•</span>
-                  <button onclick="cancelTransactionHandler('${tx.id}')" class="text-[11px] text-rose-400 font-semibold hover:underline flex items-center gap-0.5" title="Batalkan Transaksi (Admin)">
-                    <i class="fa-solid fa-ban text-[9px]"></i>
-                    <span>Batal</span>
-                  </button>
+                  ${cancelBtnMobile}
                 </div>
               </div>
             </div>
@@ -1857,6 +1899,13 @@ async function cancelTransactionHandler(txId) {
   const tx = transactions.find(t => String(t.id) === String(txId));
   if (!tx) {
     alert('Transaksi tidak ditemukan.');
+    return;
+  }
+
+  // 2b. Validasi batas waktu: transaksi yang sudah lewat 1 hari (> 24 jam) tidak dapat dibatalkan
+  if (isTransactionExpiredForCancel(tx)) {
+    showToast('Transaksi tidak dapat dibatalkan karena sudah lewat lebih dari 1 hari.', 'error');
+    alert(`Transaksi #${tx.id} tidak dapat dibatalkan karena sudah lewat lebih dari 1 hari (24 jam) sejak tanggal transaksi.`);
     return;
   }
 
