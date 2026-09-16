@@ -354,8 +354,11 @@ const CloudDB = {
           body: JSON.stringify({ action: 'save_expense', data: expense, key: config.mysqlApiKey, storeId: this.getActiveStoreId() })
         });
       } else if (this.firestore) {
-        await this.getCollection('expenses').doc(String(expense.id || Date.now())).set({
+        const docId = String(expense.id || expense.timestamp || Date.now());
+        if (!expense.id) expense.id = !isNaN(Number(docId)) ? Number(docId) : docId;
+        await this.getCollection('expenses').doc(docId).set({
           ...expense,
+          id: expense.id,
           storeId: this.getActiveStoreId(),
           _syncedAt: new Date().toISOString()
         }, { merge: true });
@@ -484,9 +487,28 @@ const CloudDB = {
           const docData = change.doc.data();
           if (!docData) continue;
           delete docData._syncedAt;
-          if (docData.id) docData.id = Number(docData.id);
+          const docId = change.doc.id;
+          if (!docData.id) {
+            docData.id = !isNaN(Number(docId)) ? Number(docId) : docId;
+          } else if (!isNaN(Number(docData.id))) {
+            docData.id = Number(docData.id);
+          }
 
           if (change.type === 'added' || change.type === 'modified') {
+            // Cek apakah di lokal sudah ada expense yang identik (untuk mencegah duplikasi)
+            const localExpenses = await DB.execute('expenses', 'readonly', (store) => store.getAll());
+            const duplicateLocal = (localExpenses || []).find(e => 
+              String(e.id) !== String(docData.id) &&
+              e.type === docData.type &&
+              e.title === docData.title &&
+              Number(e.amount) === Number(docData.amount) &&
+              e.date === docData.date &&
+              Math.abs((e.timestamp || 0) - (docData.timestamp || 0)) < 3000
+            );
+            if (duplicateLocal) {
+              await DB.execute('expenses', 'readwrite', (store) => store.delete(duplicateLocal.id));
+            }
+
             await DB.execute('expenses', 'readwrite', (store) => store.put(docData));
             hasChanges = true;
           } else if (change.type === 'removed') {

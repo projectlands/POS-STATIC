@@ -356,6 +356,7 @@ const DB = {
 
   async saveExpense(expense) {
     if (!expense.timestamp) expense.timestamp = Date.now();
+    if (!expense.id) expense.id = Date.now();
     const res = await this.execute('expenses', 'readwrite', (store) => store.put(expense));
     if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
       CloudDB.syncExpense(expense).catch(console.error);

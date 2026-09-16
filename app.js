@@ -4347,8 +4347,11 @@ function onExpenseTypeChange() {
   }
 }
 
+let isSavingExpense = false;
 async function saveExpenseHandler(e) {
   e.preventDefault();
+  if (isSavingExpense) return;
+
   const type = document.getElementById('expense-type').value;
   const title = document.getElementById('expense-title').value.trim();
   const amount = Number(document.getElementById('expense-amount').value) || 0;
@@ -4360,9 +4363,19 @@ async function saveExpenseHandler(e) {
     return;
   }
 
-  const timestamp = parseLocalDate(dateStr, false);
+  isSavingExpense = true;
+  const submitBtn = document.getElementById('btn-submit-expense');
+  const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
+  }
+
+  const timestamp = parseLocalDate(dateStr, false) || Date.now();
+  const expenseId = Date.now();
 
   const expenseItem = {
+    id: expenseId,
     type,
     title,
     amount,
@@ -4379,6 +4392,12 @@ async function saveExpenseHandler(e) {
   } catch (err) {
     console.error('Failed to save expense:', err);
     alert('Gagal menyimpan catatan pengeluaran: ' + err.message);
+  } finally {
+    isSavingExpense = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
+    }
   }
 }
 
@@ -4479,7 +4498,25 @@ async function loadFinancialReportData(startTimestamp = null, endTimestamp = nul
   const grossProfit = netSales - cogs;
 
   // Get all expenses from DB
-  const allExpenses = await DB.getExpenses();
+  const allExpensesRaw = await DB.getExpenses();
+
+  // Bersihkan data kembar / duplikat otomatis jika ada catatan yang terinput ganda
+  const seenExpenseKeys = new Map();
+  const allExpenses = [];
+  for (const exp of allExpensesRaw) {
+    if (exp.isDeleted) continue;
+    const timeBucket = Math.floor((exp.timestamp || 0) / 4000);
+    const key = `${exp.type}_${exp.title}_${exp.amount}_${exp.date}_${timeBucket}`;
+    if (seenExpenseKeys.has(key)) {
+      console.warn('[BukuKas] Membersihkan catatan ganda otomatis id:', exp.id);
+      if (typeof DB.permanentlyDeleteExpense === 'function') {
+        await DB.permanentlyDeleteExpense(exp.id);
+      }
+      continue;
+    }
+    seenExpenseKeys.set(key, exp.id);
+    allExpenses.push(exp);
+  }
 
   // Filter expenses by date range
   const filteredExpenses = (startTimestamp && endTimestamp)
