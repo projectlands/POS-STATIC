@@ -218,13 +218,26 @@ const CloudDB = {
     this.setStatus('disconnected', 'Mode Database Dinonaktifkan (Lokal Saja)');
   },
 
+  getActiveStoreId() {
+    if (typeof DB !== 'undefined' && DB.getActiveStoreId) {
+      return DB.getActiveStoreId() || 'store_gadget';
+    }
+    return localStorage.getItem('pos_active_store_id') || 'store_gadget';
+  },
+
+  getCollection(name) {
+    if (!this.firestore) return null;
+    const storeId = this.getActiveStoreId();
+    return this.firestore.collection(`stores/${storeId}/${name}`);
+  },
+
   getProviderName(p) {
     if (p === 'sheets') return 'Google Spreadsheet';
     if (p === 'mysql') return 'MySQL / MariaDB';
     return 'Firebase Firestore';
   },
 
-  // --- Realtime Sync Handlers ---
+  // --- Realtime Sync Handlers (Store-Scoped) ---
 
   async syncTransaction(transaction) {
     if (!this.isEnabled) return;
@@ -237,21 +250,22 @@ const CloudDB = {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'save_transaction', data: transaction })
+          body: JSON.stringify({ action: 'save_transaction', data: transaction, storeId: this.getActiveStoreId() })
         });
       } else if (this.provider === 'mysql') {
         await fetch(config.mysqlApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'save_transaction', data: transaction, key: config.mysqlApiKey })
+          body: JSON.stringify({ action: 'save_transaction', data: transaction, key: config.mysqlApiKey, storeId: this.getActiveStoreId() })
         });
       } else if (this.firestore) {
-        await this.firestore.collection('transactions').doc(String(transaction.id)).set({
+        await this.getCollection('transactions').doc(String(transaction.id)).set({
           ...transaction,
+          storeId: this.getActiveStoreId(),
           _syncedAt: new Date().toISOString()
         }, { merge: true });
       }
-      console.log('Transaction synced to remote database:', transaction.id);
+      console.log('Transaction synced to remote database:', transaction.id, 'Store:', this.getActiveStoreId());
     } catch (err) {
       console.error('Failed to sync transaction:', err);
     }
@@ -268,23 +282,36 @@ const CloudDB = {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'save_product', data: product })
+          body: JSON.stringify({ action: 'save_product', data: product, storeId: this.getActiveStoreId() })
         });
       } else if (this.provider === 'mysql') {
         await fetch(config.mysqlApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'save_product', data: product, key: config.mysqlApiKey })
+          body: JSON.stringify({ action: 'save_product', data: product, key: config.mysqlApiKey, storeId: this.getActiveStoreId() })
         });
       } else if (this.firestore) {
-        await this.firestore.collection('products').doc(String(product.id)).set({
+        await this.getCollection('products').doc(String(product.id)).set({
           ...product,
+          storeId: this.getActiveStoreId(),
           _syncedAt: new Date().toISOString()
         }, { merge: true });
       }
-      console.log('Product synced to remote database:', product.id);
+      console.log('Product synced to remote database:', product.id, 'Store:', this.getActiveStoreId());
     } catch (err) {
       console.error('Failed to sync product:', err);
+    }
+  },
+
+  async deleteProduct(id) {
+    if (!this.isEnabled) return;
+    try {
+      if (this.firestore) {
+        await this.getCollection('products').doc(String(id)).delete();
+        console.log('Product deleted from Firestore:', id);
+      }
+    } catch (err) {
+      console.error('Failed to delete product in Firestore:', err);
     }
   },
 
@@ -299,23 +326,36 @@ const CloudDB = {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'save_expense', data: expense })
+          body: JSON.stringify({ action: 'save_expense', data: expense, storeId: this.getActiveStoreId() })
         });
       } else if (this.provider === 'mysql') {
         await fetch(config.mysqlApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'save_expense', data: expense, key: config.mysqlApiKey })
+          body: JSON.stringify({ action: 'save_expense', data: expense, key: config.mysqlApiKey, storeId: this.getActiveStoreId() })
         });
       } else if (this.firestore) {
-        await this.firestore.collection('expenses').doc(String(expense.id || Date.now())).set({
+        await this.getCollection('expenses').doc(String(expense.id || Date.now())).set({
           ...expense,
+          storeId: this.getActiveStoreId(),
           _syncedAt: new Date().toISOString()
         }, { merge: true });
       }
-      console.log('Expense synced to remote database:', expense.title);
+      console.log('Expense synced to remote database:', expense.title, 'Store:', this.getActiveStoreId());
     } catch (err) {
       console.error('Failed to sync expense:', err);
+    }
+  },
+
+  async deleteExpense(id) {
+    if (!this.isEnabled) return;
+    try {
+      if (this.firestore) {
+        await this.getCollection('expenses').doc(String(id)).delete();
+        console.log('Expense deleted from Firestore:', id);
+      }
+    } catch (err) {
+      console.error('Failed to delete expense in Firestore:', err);
     }
   },
 
@@ -326,11 +366,12 @@ const CloudDB = {
 
     try {
       if (this.firestore) {
-        await this.firestore.collection('stock_mutations').doc(String(mutation.id || Date.now())).set({
+        await this.getCollection('stock_mutations').doc(String(mutation.id || Date.now())).set({
           ...mutation,
+          storeId: this.getActiveStoreId(),
           _syncedAt: new Date().toISOString()
         }, { merge: true });
-        console.log('Stock mutation synced to Firestore:', mutation.id);
+        console.log('Stock mutation synced to Firestore:', mutation.id, 'Store:', this.getActiveStoreId());
       }
     } catch (err) {
       console.error('Failed to sync stock mutation:', err);
@@ -341,7 +382,7 @@ const CloudDB = {
     if (!this.isEnabled) return;
     try {
       if (this.firestore) {
-        await this.firestore.collection('stock_mutations').doc(String(id)).delete();
+        await this.getCollection('stock_mutations').doc(String(id)).delete();
         console.log('Stock mutation deleted from Firestore:', id);
       }
     } catch (err) {
@@ -349,7 +390,24 @@ const CloudDB = {
     }
   },
 
-  // --- Realtime Multi-Device Listeners ---
+  async syncSetting(key, value) {
+    if (!this.isEnabled) return;
+    try {
+      if (this.firestore) {
+        await this.getCollection('settings').doc(String(key)).set({
+          key,
+          value,
+          storeId: this.getActiveStoreId(),
+          _syncedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`Setting '${key}' synced to Firestore for store:`, this.getActiveStoreId());
+      }
+    } catch (err) {
+      console.error(`Failed to sync setting '${key}':`, err);
+    }
+  },
+
+  // --- Realtime Multi-Device Listeners (Store-Scoped) ---
 
   stopRealtimeListeners() {
     if (this.unsubscribers && this.unsubscribers.length > 0) {
@@ -365,11 +423,13 @@ const CloudDB = {
     this.stopRealtimeListeners();
     if (!this.firestore || typeof DB === 'undefined') return;
 
-    console.log('[CloudDB] Starting Firestore Realtime Listeners for instant multi-device sync...');
+    const currentStoreId = this.getActiveStoreId();
+    console.log(`[CloudDB] Starting Firestore Realtime Listeners for store '${currentStoreId}'...`);
 
     // 1. Realtime Products & Sempol Stock
     try {
-      const unsubProducts = this.firestore.collection('products').onSnapshot(async (snapshot) => {
+      const unsubProducts = this.getCollection('products').onSnapshot(async (snapshot) => {
+        if (this.getActiveStoreId() !== currentStoreId) return;
         let hasChanges = false;
         for (const change of snapshot.docChanges()) {
           const docData = change.doc.data();
@@ -398,7 +458,8 @@ const CloudDB = {
 
     // 2. Realtime Expenses
     try {
-      const unsubExpenses = this.firestore.collection('expenses').onSnapshot(async (snapshot) => {
+      const unsubExpenses = this.getCollection('expenses').onSnapshot(async (snapshot) => {
+        if (this.getActiveStoreId() !== currentStoreId) return;
         let hasChanges = false;
         for (const change of snapshot.docChanges()) {
           const docData = change.doc.data();
@@ -427,7 +488,8 @@ const CloudDB = {
 
     // 3. Realtime Transactions
     try {
-      const unsubTransactions = this.firestore.collection('transactions').onSnapshot(async (snapshot) => {
+      const unsubTransactions = this.getCollection('transactions').onSnapshot(async (snapshot) => {
+        if (this.getActiveStoreId() !== currentStoreId) return;
         let hasChanges = false;
         for (const change of snapshot.docChanges()) {
           const docData = change.doc.data();
@@ -456,7 +518,8 @@ const CloudDB = {
 
     // 4. Realtime Stock Mutations (Kulakan & Stok Opname)
     try {
-      const unsubMutations = this.firestore.collection('stock_mutations').onSnapshot(async (snapshot) => {
+      const unsubMutations = this.getCollection('stock_mutations').onSnapshot(async (snapshot) => {
+        if (this.getActiveStoreId() !== currentStoreId) return;
         let hasChanges = false;
         for (const change of snapshot.docChanges()) {
           const docData = change.doc.data();
@@ -484,23 +547,45 @@ const CloudDB = {
     } catch (e) {
       console.warn('Failed to start stock mutations listener:', e);
     }
+
+    // 5. Realtime Store Info & Branding
+    try {
+      const unsubSettings = this.getCollection('settings').doc('store_info').onSnapshot(async (doc) => {
+        if (this.getActiveStoreId() !== currentStoreId) return;
+        if (doc.exists) {
+          const data = doc.data();
+          const info = data ? (data.value || data) : null;
+          if (info && info.name) {
+            await DB.execute('settings', 'readwrite', (store) => store.put({ key: 'store_info', value: info }));
+            if (typeof window.onCloudStoreInfoUpdated === 'function') {
+              window.onCloudStoreInfoUpdated(info);
+            }
+          }
+        }
+      }, (err) => console.warn('[CloudDB] Settings realtime error:', err));
+      this.unsubscribers.push(unsubSettings);
+    } catch (e) {
+      console.warn('Failed to start settings listener:', e);
+    }
   },
 
-  // --- Bulk Sync Operations (Upload & Download) ---
+  // --- Bulk Sync Operations (Store-Scoped Upload & Download) ---
 
   async uploadAllLocalData(localDB) {
     const config = this.getConfig();
     if (!config) throw new Error('Database belum dikonfigurasi');
 
-    const [products, categories, transactions, storeInfo, expenses] = await Promise.all([
+    const storeId = this.getActiveStoreId();
+    const [products, categories, transactions, storeInfo, expenses, stockMutations] = await Promise.all([
       localDB.getProducts(),
       localDB.getCategories(),
       localDB.getTransactions(),
       localDB.getSettings('store_info'),
-      localDB.getExpenses ? localDB.getExpenses() : Promise.resolve([])
+      localDB.getExpenses ? localDB.getExpenses() : Promise.resolve([]),
+      localDB.getStockMutations ? localDB.getStockMutations() : Promise.resolve([])
     ]);
 
-    const payload = { products, categories, transactions, storeInfo, expenses };
+    const payload = { products, categories, transactions, storeInfo, expenses, stockMutations, storeId };
 
     if (this.provider === 'sheets') {
       const res = await fetch(config.sheetsUrl, {
@@ -512,7 +597,8 @@ const CloudDB = {
         productsCount: products.length,
         categoriesCount: categories.length,
         transactionsCount: transactions.length,
-        expensesCount: expenses.length
+        expensesCount: expenses.length,
+        mutationsCount: stockMutations.length
       };
 
     } else if (this.provider === 'mysql') {
@@ -526,7 +612,7 @@ const CloudDB = {
       return json;
 
     } else {
-      // Firebase Firestore Batch
+      // Firebase Firestore Batch with Store Scoping
       if (!this.firestore) throw new Error('Firebase belum terhubung');
       const batch = this.firestore.batch();
       let opCount = 0;
@@ -539,20 +625,37 @@ const CloudDB = {
         }
       };
 
+      // 1. Products
       for (const p of products) {
-        batch.set(this.firestore.collection('products').doc(String(p.id)), { ...p, _syncedAt: new Date().toISOString() }, { merge: true });
+        batch.set(this.getCollection('products').doc(String(p.id)), { ...p, storeId, _syncedAt: new Date().toISOString() }, { merge: true });
         opCount++;
         await commitIfNeeded();
       }
 
+      // 2. Transactions
       for (const t of transactions) {
-        batch.set(this.firestore.collection('transactions').doc(String(t.id)), { ...t, _syncedAt: new Date().toISOString() }, { merge: true });
+        batch.set(this.getCollection('transactions').doc(String(t.id)), { ...t, storeId, _syncedAt: new Date().toISOString() }, { merge: true });
         opCount++;
         await commitIfNeeded();
       }
 
+      // 3. Expenses
       for (const e of expenses) {
-        batch.set(this.firestore.collection('expenses').doc(String(e.id)), { ...e, _syncedAt: new Date().toISOString() }, { merge: true });
+        batch.set(this.getCollection('expenses').doc(String(e.id)), { ...e, storeId, _syncedAt: new Date().toISOString() }, { merge: true });
+        opCount++;
+        await commitIfNeeded();
+      }
+
+      // 4. Stock Mutations
+      for (const m of stockMutations) {
+        batch.set(this.getCollection('stock_mutations').doc(String(m.id)), { ...m, storeId, _syncedAt: new Date().toISOString() }, { merge: true });
+        opCount++;
+        await commitIfNeeded();
+      }
+
+      // 5. Store Settings
+      if (storeInfo) {
+        batch.set(this.getCollection('settings').doc('store_info'), { key: 'store_info', value: storeInfo, storeId, _syncedAt: new Date().toISOString() }, { merge: true });
         opCount++;
         await commitIfNeeded();
       }
@@ -563,7 +666,8 @@ const CloudDB = {
         productsCount: products.length,
         categoriesCount: categories.length,
         transactionsCount: transactions.length,
-        expensesCount: expenses.length
+        expensesCount: expenses.length,
+        mutationsCount: stockMutations.length
       };
     }
   },
@@ -572,8 +676,10 @@ const CloudDB = {
     const config = this.getConfig();
     if (!config) throw new Error('Database belum dikonfigurasi');
 
+    const storeId = this.getActiveStoreId();
+
     if (this.provider === 'sheets') {
-      const res = await fetch(`${config.sheetsUrl}?action=bulk_download`, { method: 'GET' });
+      const res = await fetch(`${config.sheetsUrl}?action=bulk_download&storeId=${encodeURIComponent(storeId)}`, { method: 'GET' });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || 'Gagal download dari Google Sheets');
 
@@ -581,11 +687,12 @@ const CloudDB = {
       return {
         productsCount: (json.products || []).length,
         transactionsCount: (json.transactions || []).length,
-        expensesCount: (json.expenses || []).length
+        expensesCount: (json.expenses || []).length,
+        mutationsCount: (json.stockMutations || []).length
       };
 
     } else if (this.provider === 'mysql') {
-      const res = await fetch(`${config.mysqlApiUrl}?action=bulk_download&key=${encodeURIComponent(config.mysqlApiKey || '')}`, { method: 'GET' });
+      const res = await fetch(`${config.mysqlApiUrl}?action=bulk_download&storeId=${encodeURIComponent(storeId)}&key=${encodeURIComponent(config.mysqlApiKey || '')}`, { method: 'GET' });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || 'Gagal download dari MySQL');
 
@@ -593,31 +700,35 @@ const CloudDB = {
       return {
         productsCount: (json.products || []).length,
         transactionsCount: (json.transactions || []).length,
-        expensesCount: (json.expenses || []).length
+        expensesCount: (json.expenses || []).length,
+        mutationsCount: (json.stockMutations || []).length
       };
 
     } else {
-      // Firebase Firestore
+      // Firebase Firestore with Store Scoping
       if (!this.firestore) throw new Error('Firebase belum terhubung');
 
-      const [productsSnap, transactionsSnap, expensesSnap, settingsSnap] = await Promise.all([
-        this.firestore.collection('products').get(),
-        this.firestore.collection('transactions').get(),
-        this.firestore.collection('expenses').get(),
-        this.firestore.collection('settings').doc('store_info').get()
+      const [productsSnap, transactionsSnap, expensesSnap, settingsSnap, mutationsSnap] = await Promise.all([
+        this.getCollection('products').get(),
+        this.getCollection('transactions').get(),
+        this.getCollection('expenses').get(),
+        this.getCollection('settings').doc('store_info').get(),
+        this.getCollection('stock_mutations').get()
       ]);
 
       const products = productsSnap.docs.map(d => { const dt = d.data(); delete dt._syncedAt; return dt; });
       const transactions = transactionsSnap.docs.map(d => { const dt = d.data(); delete dt._syncedAt; return dt; });
       const expenses = expensesSnap.docs.map(d => { const dt = d.data(); delete dt._syncedAt; return dt; });
-      const storeInfo = settingsSnap.exists ? settingsSnap.data() : null;
+      const stockMutations = mutationsSnap ? mutationsSnap.docs.map(d => { const dt = d.data(); delete dt._syncedAt; return dt; }) : [];
+      const storeInfo = settingsSnap.exists ? (settingsSnap.data().value || settingsSnap.data()) : null;
 
-      await localDB.importFromCloud({ products, transactions, expenses, storeInfo, categories: [] });
+      await localDB.importFromCloud({ products, transactions, expenses, stockMutations, storeInfo, categories: [] });
 
       return {
         productsCount: products.length,
         transactionsCount: transactions.length,
-        expensesCount: expenses.length
+        expensesCount: expenses.length,
+        mutationsCount: stockMutations.length
       };
     }
   },

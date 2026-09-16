@@ -63,6 +63,12 @@ const DB = {
     }
     this.setActiveStoreId(storeId);
     await this.init();
+    if (storeId === 'store_sempol') {
+      await this.repairSempolStoreData();
+    }
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.startRealtimeListeners();
+    }
   },
 
   addNewStore(storeData) {
@@ -98,9 +104,16 @@ const DB = {
         reject(e);
       };
 
-      request.onsuccess = (e) => {
+      request.onsuccess = async (e) => {
         this.db = e.target.result;
         console.log('Database initialized successfully');
+        if (this.getActiveStoreId() === 'store_sempol') {
+          try {
+            await this.repairSempolStoreData();
+          } catch (err) {
+            console.warn('[DB] Auto-repair sempol warning:', err);
+          }
+        }
         this.seedInitialData().then(resolve).catch(resolve);
       };
 
@@ -284,8 +297,12 @@ const DB = {
     });
   },
 
-  saveSettings(key, value) {
-    return this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
+  async saveSettings(key, value) {
+    const res = await this.execute('settings', 'readwrite', (store) => store.put({ key, value }));
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.syncSetting(key, value).catch(console.error);
+    }
+    return res;
   },
 
   // Auth Settings (PIN Kasir & Admin)
@@ -328,25 +345,37 @@ const DB = {
   },
 
   // Import data dari Cloud Firestore ke IndexedDB Lokal
-  async importFromCloud({ products, categories, transactions, storeInfo, expenses }) {
+  async importFromCloud({ products, categories, transactions, storeInfo, expenses, stockMutations }) {
     if (categories && categories.length > 0) {
       for (const cat of categories) {
+        if (cat.id && !isNaN(cat.id)) cat.id = Number(cat.id);
         await this.execute('categories', 'readwrite', (store) => store.put(cat));
       }
     }
     if (products && products.length > 0) {
       for (const prod of products) {
+        if (prod.id && !isNaN(prod.id)) prod.id = Number(prod.id);
         await this.execute('products', 'readwrite', (store) => store.put(prod));
       }
     }
     if (transactions && transactions.length > 0) {
       for (const trx of transactions) {
+        if (trx.id && !isNaN(trx.id)) trx.id = Number(trx.id);
         await this.execute('transactions', 'readwrite', (store) => store.put(trx));
       }
     }
     if (expenses && expenses.length > 0) {
       for (const exp of expenses) {
+        if (exp.id && !isNaN(exp.id)) exp.id = Number(exp.id);
         await this.execute('expenses', 'readwrite', (store) => store.put(exp));
+      }
+    }
+    if (stockMutations && stockMutations.length > 0) {
+      if (this.db && this.db.objectStoreNames.contains('stock_mutations')) {
+        for (const mut of stockMutations) {
+          if (mut.id && !isNaN(mut.id)) mut.id = Number(mut.id);
+          await this.execute('stock_mutations', 'readwrite', (store) => store.put(mut));
+        }
       }
     }
     if (storeInfo) {
@@ -413,6 +442,204 @@ const DB = {
       if (p.isSempol) {
         p.stock = Math.max(0, newStock);
         await this.saveProduct(p);
+      }
+    }
+  },
+
+  // Perbaikan & Pembersihan data khusus POS Sempol Ayam
+  async repairSempolStoreData() {
+    if (this.getActiveStoreId() !== 'store_sempol') return;
+    console.log('[DB] Running repair & deduplication for Sempol store...');
+
+    // 1. Perbaiki Identitas Toko jika tertimpa Toko Gadget
+    const currentStoreInfo = await this.getSettings('store_info');
+    if (!currentStoreInfo || !currentStoreInfo.name || currentStoreInfo.name.includes('Ruang Temu') || currentStoreInfo.name.includes('Gadget') || currentStoreInfo.taxRate === 11) {
+      const sempolInfo = {
+        name: 'Sempol Ayam Crispy Juara',
+        address: 'Jl. Kuliner No. 8, Lapak Kaki Lima',
+        phone: '0812-3456-7890',
+        taxRate: 0,
+        serviceCharge: 0,
+        currency: 'IDR',
+        receiptFooter: 'Matur nuwun! Gurih, Renyah, Mantap!'
+      };
+      await this.saveSettings('store_info', sempolInfo);
+      if (typeof State !== 'undefined') {
+        State.storeInfo = sempolInfo;
+      }
+    }
+
+    // 2. Perbaiki Kategori: Hapus kategori gadget yang sempat masuk
+    const sempolCatNames = ['Paket Sempol', 'Minuman Segar', 'Ekstra & Saus'];
+    const currentCats = await this.getCategories();
+    for (const cat of currentCats) {
+      if (!sempolCatNames.includes(cat.name)) {
+        await this.deleteCategory(cat.id);
+      }
+    }
+    const freshCats = await this.getCategories();
+    const existingCatNames = freshCats.map(c => c.name);
+    for (const name of sempolCatNames) {
+      if (!existingCatNames.includes(name)) {
+        await this.saveCategory({ name });
+      }
+    }
+
+    // 3. Perbaiki Produk: Bersihkan produk gadget & duplikat
+    const allProducts = await this.getProducts();
+    const seenCodes = new Map();
+    let maxSempolStock = 100;
+
+    for (const prod of allProducts) {
+      const isGadgetCode = prod.code && String(prod.code).startsWith('EL');
+      const isGadgetCat = ['Smartphone & Tablet', 'Audio & Headphone', 'Aksesoris & Charger', 'Laptop & Komputer', 'Wearable & Smartwatch'].includes(prod.category);
+
+      if (isGadgetCode || isGadgetCat) {
+        console.log('[DB] Removing alien gadget product from Sempol store:', prod.name, prod.code);
+        await this.deleteProduct(prod.id);
+        continue;
+      }
+
+      if (prod.isSempol && prod.stock && prod.stock > 0) {
+        if (prod.stock > maxSempolStock) maxSempolStock = prod.stock;
+      }
+
+      if (prod.code) {
+        if (seenCodes.has(prod.code)) {
+          console.log('[DB] Removing duplicate product in Sempol store:', prod.name, prod.code, 'ID:', prod.id);
+          await this.deleteProduct(prod.id);
+        } else {
+          seenCodes.set(prod.code, prod);
+        }
+      }
+    }
+
+    // 4. Pastikan menu utama Sempol selalu lengkap
+    const updatedProducts = await this.getProducts();
+    const existingCodes = updatedProducts.map(p => p.code);
+    const initialSempolProducts = [
+      {
+        name: 'Sempol Paket Puas (6 Tusuk)',
+        price: 10000,
+        cost: 2400,
+        unitCost: 400,
+        piecesPerUnit: 6,
+        stock: maxSempolStock,
+        category: 'Paket Sempol',
+        code: 'SMP-001',
+        color: 'amber',
+        icon: 'fa-utensils',
+        isSempol: true
+      },
+      {
+        name: 'Sempol Paket Hemat (3 Tusuk)',
+        price: 5000,
+        cost: 1200,
+        unitCost: 400,
+        piecesPerUnit: 3,
+        stock: maxSempolStock,
+        category: 'Paket Sempol',
+        code: 'SMP-002',
+        color: 'orange',
+        icon: 'fa-utensils',
+        isSempol: true
+      },
+      {
+        name: 'Sempol Paket Jumbo (10 Tusuk)',
+        price: 15000,
+        cost: 4000,
+        unitCost: 400,
+        piecesPerUnit: 10,
+        stock: maxSempolStock,
+        category: 'Paket Sempol',
+        code: 'SMP-003',
+        color: 'yellow',
+        icon: 'fa-fire',
+        isSempol: true
+      },
+      {
+        name: 'Sempol Eceran (1 Tusuk)',
+        price: 2000,
+        cost: 400,
+        unitCost: 400,
+        piecesPerUnit: 1,
+        stock: maxSempolStock,
+        category: 'Paket Sempol',
+        code: 'SMP-004',
+        color: 'rose',
+        icon: 'fa-utensils',
+        isSempol: true
+      },
+      {
+        name: 'Es Teh Manis Jumbo',
+        price: 5000,
+        cost: 1500,
+        unitCost: 1500,
+        piecesPerUnit: 1,
+        stock: 50,
+        category: 'Minuman Segar',
+        code: 'DRK-001',
+        color: 'emerald',
+        icon: 'fa-glass-water',
+        isSempol: false
+      },
+      {
+        name: 'Air Mineral Dingin',
+        price: 3000,
+        cost: 1500,
+        unitCost: 1500,
+        piecesPerUnit: 1,
+        stock: 40,
+        category: 'Minuman Segar',
+        code: 'DRK-002',
+        color: 'sky',
+        icon: 'fa-bottle-water',
+        isSempol: false
+      },
+      {
+        name: 'Ekstra Saus Sambal Pedas Manis',
+        price: 1000,
+        cost: 300,
+        unitCost: 300,
+        piecesPerUnit: 1,
+        stock: 80,
+        category: 'Ekstra & Saus',
+        code: 'TOP-001',
+        color: 'red',
+        icon: 'fa-pepper-hot',
+        isSempol: false
+      }
+    ];
+
+    for (const initProd of initialSempolProducts) {
+      if (!existingCodes.includes(initProd.code)) {
+        await this.saveProduct(initProd);
+      }
+    }
+
+    // 5. Samakan stok tusuk sempol di semua menu sempol
+    const finalProducts = await this.getProducts();
+    for (const p of finalProducts) {
+      if (p.isSempol && p.stock !== maxSempolStock) {
+        p.stock = maxSempolStock;
+        await this.execute('products', 'readwrite', (store) => store.put(p));
+      }
+    }
+
+    // 6. Bersihkan transaksi alien / duplikat di Sempol
+    const txList = await this.getTransactions();
+    const seenTxKeys = new Set();
+    for (const tx of txList) {
+      const isGadgetTx = tx.items && tx.items.some(it => it.code && String(it.code).startsWith('EL'));
+      const txKey = String(tx.id);
+      if (isGadgetTx) {
+        console.log('[DB] Removing alien gadget transaction from Sempol store:', tx.id);
+        await this.deleteTransaction(tx.id);
+      } else if (seenTxKeys.has(txKey)) {
+        console.log('[DB] Removing duplicate transaction from Sempol store:', tx.id);
+        await this.deleteTransaction(tx.id);
+      } else {
+        seenTxKeys.add(txKey);
       }
     }
   },

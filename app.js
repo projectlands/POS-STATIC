@@ -3323,6 +3323,22 @@ window.onCloudMutationsUpdated = async function() {
   }
 };
 
+window.onCloudStoreInfoUpdated = async function(info) {
+  try {
+    console.log('[Realtime] Store info updated from cloud, updating UI...', info);
+    State.storeInfo = info;
+    if (info) {
+      if (typeof info.taxRate !== 'undefined') State.taxRate = info.taxRate;
+      if (typeof info.serviceCharge !== 'undefined') State.serviceChargeRate = info.serviceCharge;
+      const taxEl = document.getElementById('label-cart-tax');
+      if (taxEl) taxEl.innerText = `${State.taxRate + State.serviceChargeRate}%`;
+    }
+    updateStoreBrandingUI();
+  } catch (e) {
+    console.error('onCloudStoreInfoUpdated error:', e);
+  }
+};
+
 // ====================================================
 // MOBILE MENU DRAWER (MODAL BOTTOM SHEET)
 // ====================================================
@@ -3346,13 +3362,24 @@ function closeMobileMenuModal() {
 
 function updateStoreBrandingUI() {
   const store = DB.getActiveStore();
+  const isSempol = store.id === 'store_sempol';
+
+  // Tentukan nama toko: prioritaskan State.storeInfo jika valid dan tidak tertimpa
+  let displayName = store.name;
+  if (State.storeInfo && State.storeInfo.name) {
+    if (isSempol && (State.storeInfo.name.includes('Ruang Temu') || State.storeInfo.name.includes('Gadget'))) {
+      displayName = 'Sempol Ayam Crispy Juara';
+    } else {
+      displayName = State.storeInfo.name;
+    }
+  }
 
   const storeNameEls = [
     document.getElementById('sidebar-store-name'),
     document.getElementById('header-store-name')
   ];
   storeNameEls.forEach(el => {
-    if (el) el.innerText = store.name;
+    if (el) el.innerText = displayName;
   });
 
   const taglineEl = document.getElementById('sidebar-store-tagline');
@@ -3375,7 +3402,7 @@ function updateStoreBrandingUI() {
 
   // Update Mobile Menu Drawer Branding
   const mStoreName = document.getElementById('m-menu-store-name');
-  if (mStoreName) mStoreName.innerText = store.name;
+  if (mStoreName) mStoreName.innerText = displayName;
 
   const mTagline = document.getElementById('m-menu-store-tagline');
   if (mTagline) mTagline.innerText = store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Retail Store');
@@ -3390,7 +3417,7 @@ function updateStoreBrandingUI() {
 
   // Update Login Screen Branding
   const loginStoreName = document.getElementById('login-store-name');
-  if (loginStoreName) loginStoreName.innerText = store.name;
+  if (loginStoreName) loginStoreName.innerText = displayName;
   const loginTagline = document.getElementById('login-store-tagline');
   if (loginTagline) loginTagline.innerText = store.tagline || (store.type === 'food' ? 'Kuliner & Street Food' : 'Point of Sale & Kasir Pintar');
   const loginStoreIcon = document.getElementById('login-store-icon');
@@ -3413,24 +3440,27 @@ function openStoreSettingsModal() {
   const modal = document.getElementById('modal-store-settings');
   if (!modal) return;
 
+  const isSempol = DB.getActiveStoreId() === 'store_sempol';
   const nameInput = document.getElementById('setting-store-name');
   const addrInput = document.getElementById('setting-store-address');
   const phoneInput = document.getElementById('setting-store-phone');
   const taxInput = document.getElementById('setting-store-tax');
   const footerInput = document.getElementById('setting-store-footer');
 
-  if (State.storeInfo) {
+  const hasCustomInfo = State.storeInfo && (!isSempol || (!State.storeInfo.name.includes('Ruang Temu') && !State.storeInfo.name.includes('Gadget')));
+
+  if (hasCustomInfo) {
     if (nameInput) nameInput.value = State.storeInfo.name || '';
     if (addrInput) addrInput.value = State.storeInfo.address || '';
     if (phoneInput) phoneInput.value = State.storeInfo.phone || '';
-    if (taxInput) taxInput.value = typeof State.storeInfo.taxRate !== 'undefined' ? State.storeInfo.taxRate : 11;
+    if (taxInput) taxInput.value = typeof State.storeInfo.taxRate !== 'undefined' ? State.storeInfo.taxRate : (isSempol ? 0 : 11);
     if (footerInput) footerInput.value = State.storeInfo.receiptFooter || '';
   } else {
-    if (nameInput) nameInput.value = 'Ruang Temu Gadget';
-    if (addrInput) addrInput.value = 'MTC Mall Lantai 2, Jakarta';
-    if (phoneInput) phoneInput.value = '0812-9876-5432';
-    if (taxInput) taxInput.value = 11;
-    if (footerInput) footerInput.value = 'Terima kasih atas kunjungan Anda!';
+    if (nameInput) nameInput.value = isSempol ? 'Sempol Ayam Crispy Juara' : 'Ruang Temu Gadget';
+    if (addrInput) addrInput.value = isSempol ? 'Jl. Kuliner No. 8, Lapak Kaki Lima' : 'MTC Mall Lantai 2, Jakarta';
+    if (phoneInput) phoneInput.value = isSempol ? '0812-3456-7890' : '0812-9876-5432';
+    if (taxInput) taxInput.value = isSempol ? 0 : 11;
+    if (footerInput) footerInput.value = isSempol ? 'Matur nuwun! Gurih, Renyah, Mantap!' : 'Terima kasih atas kunjungan Anda!';
   }
 
   modal.classList.remove('hidden');
@@ -3446,11 +3476,11 @@ function closeStoreSettingsModal() {
 async function saveStoreSettingsHandler(event) {
   event.preventDefault();
 
-  const name = document.getElementById('setting-store-name')?.value || '';
-  const address = document.getElementById('setting-store-address')?.value || '';
-  const phone = document.getElementById('setting-store-phone')?.value || '';
+  const name = document.getElementById('setting-store-name')?.value.trim() || '';
+  const address = document.getElementById('setting-store-address')?.value.trim() || '';
+  const phone = document.getElementById('setting-store-phone')?.value.trim() || '';
   const taxRate = parseFloat(document.getElementById('setting-store-tax')?.value || 0);
-  const receiptFooter = document.getElementById('setting-store-footer')?.value || '';
+  const receiptFooter = document.getElementById('setting-store-footer')?.value.trim() || '';
 
   const newSettings = {
     name,
@@ -3465,6 +3495,19 @@ async function saveStoreSettingsHandler(event) {
   try {
     await DB.saveSettings('store_info', newSettings);
     State.storeInfo = newSettings;
+
+    // Update active store in registry
+    const activeStore = DB.getActiveStore();
+    if (activeStore && name) {
+      activeStore.name = name;
+      const stores = DB.getAllStores();
+      const idx = stores.findIndex(s => s.id === activeStore.id);
+      if (idx !== -1) {
+        stores[idx].name = name;
+        localStorage.setItem('pos_multistore_registry', JSON.stringify(stores));
+      }
+    }
+
     updateStoreBrandingUI();
     closeStoreSettingsModal();
     showToast("Pengaturan Toko berhasil disimpan!", 'success');
@@ -4409,17 +4452,22 @@ async function loadSempolStockReportData() {
   const allTransactions = await DB.getTransactions();
 
   // Combine sale events from transactions if not yet recorded in mutations
-  const recordedTxIds = new Set(allMutations.filter(m => m.transactionId).map(m => m.transactionId));
+  const recordedTxIds = new Set(allMutations.filter(m => m.transactionId).map(m => String(m.transactionId)));
+  const processedTxIds = new Set();
   const syntheticMutations = [];
 
   allTransactions.forEach(tx => {
-    if (!recordedTxIds.has(tx.id)) {
+    const txIdStr = String(tx.id);
+    if (!recordedTxIds.has(txIdStr) && !processedTxIds.has(txIdStr)) {
+      processedTxIds.add(txIdStr);
       let sempolQty = 0;
-      tx.items.forEach(item => {
-        if (item.isSempol) {
-          sempolQty += (item.piecesPerUnit || 1) * item.quantity;
-        }
-      });
+      if (Array.isArray(tx.items)) {
+        tx.items.forEach(item => {
+          if (item && item.isSempol) {
+            sempolQty += (item.piecesPerUnit || 1) * (item.quantity || 1);
+          }
+        });
+      }
       if (sempolQty > 0) {
         syntheticMutations.push({
           id: 'tx_' + tx.id,
@@ -4432,7 +4480,7 @@ async function loadSempolStockReportData() {
           totalCost: 0,
           supplier: '-',
           description: `Penjualan Kasir (#${tx.id})`,
-          notes: `Nota #${tx.id} (${tx.paymentMethod})`,
+          notes: `Nota #${tx.id} (${tx.paymentMethod || 'Tunai'})`,
           balanceAfter: '-'
         });
       }
