@@ -1,6 +1,6 @@
 const STORE_REGISTRY_KEY = 'pos_stores_registry';
 const ACTIVE_STORE_KEY = 'pos_active_store_id';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const DEFAULT_STORES = [
   {
@@ -148,6 +148,14 @@ const DB = {
           expenseStore.createIndex('timestamp', 'timestamp', { unique: false });
           expenseStore.createIndex('type', 'type', { unique: false });
           expenseStore.createIndex('category', 'category', { unique: false });
+        }
+
+        // Stock Mutations store (Kulakan Supplier & Mutasi Tusuk Sempol)
+        if (!db.objectStoreNames.contains('stock_mutations')) {
+          const stockStore = db.createObjectStore('stock_mutations', { keyPath: 'id', autoIncrement: true });
+          stockStore.createIndex('timestamp', 'timestamp', { unique: false });
+          stockStore.createIndex('date', 'date', { unique: false });
+          stockStore.createIndex('type', 'type', { unique: false });
         }
       };
     });
@@ -345,6 +353,41 @@ const DB = {
       await this.saveSettings('store_info', storeInfo);
     }
     return true;
+  },
+
+  // Stock Mutations CRUD (Kartu Stok & Kulakan Tusuk Sempol)
+  getStockMutations() {
+    return new Promise((resolve) => {
+      if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
+        return resolve([]);
+      }
+      this.execute('stock_mutations', 'readonly', (store) => store.getAll())
+        .then((res) => resolve(res || []))
+        .catch(() => resolve([]));
+    });
+  },
+
+  async saveStockMutation(mutation) {
+    if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
+      return null;
+    }
+    if (!mutation.timestamp) mutation.timestamp = Date.now();
+    if (!mutation.date) mutation.date = new Date().toISOString().split('T')[0];
+    return this.execute('stock_mutations', 'readwrite', (store) => {
+      if (mutation.id) {
+        mutation.id = Number(mutation.id);
+        return store.put(mutation);
+      } else {
+        return store.add(mutation);
+      }
+    });
+  },
+
+  deleteStockMutation(id) {
+    if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
+      return Promise.resolve(false);
+    }
+    return this.execute('stock_mutations', 'readwrite', (store) => store.delete(Number(id)));
   },
 
   // Helper untuk mendapatkan stok bahan tusuk sempol

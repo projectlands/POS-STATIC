@@ -450,5 +450,76 @@ const CloudDB = {
         expensesCount: expenses.length
       };
     }
+  },
+
+  // --- DEVICE PAIRING & INSTANT CLOUD SHARING (QR CODE & MAGIC LINK) ---
+
+  // Ekspor konfigurasi ke payload aman (Base64) untuk dishare via QR / Link
+  exportPairingPayload(extraMeta = {}) {
+    const config = this.getConfig();
+    if (!config) return null;
+    const payload = {
+      provider: config.provider || 'sheets',
+      sheetsUrl: config.sheetsUrl || '',
+      sheetsId: config.sheetsId || '',
+      sheetsToken: config.sheetsToken || '',
+      mysqlApiUrl: config.mysqlApiUrl || '',
+      mysqlApiKey: config.mysqlApiKey || '',
+      projectId: config.projectId || '',
+      apiKey: config.apiKey || '',
+      authDomain: config.authDomain || '',
+      storageBucket: config.storageBucket || '',
+      messagingSenderId: config.messagingSenderId || '',
+      appId: config.appId || '',
+      enabled: true,
+      storeName: extraMeta.storeName || '',
+      exportedAt: new Date().toISOString()
+    };
+    try {
+      return btoa(encodeURIComponent(JSON.stringify(payload)));
+    } catch (e) {
+      console.error('Export payload error:', e);
+      return null;
+    }
+  },
+
+  // Generate URL lengkap dengan hash fragment
+  generatePairingUrl(extraMeta = {}) {
+    const payload = this.exportPairingPayload(extraMeta);
+    if (!payload) return null;
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    return `${origin}${pathname}#cloud_connect=${payload}`;
+  },
+
+  // Parse payload dari QR atau Magic Link
+  importPairingPayload(payloadStr) {
+    if (!payloadStr) throw new Error('Payload kosong');
+    try {
+      let cleanStr = payloadStr.trim();
+      // Handle jika kasir mem-paste URL utuh
+      if (cleanStr.includes('#cloud_connect=')) {
+        cleanStr = cleanStr.split('#cloud_connect=')[1];
+      } else if (cleanStr.includes('cloud_connect=')) {
+        const match = cleanStr.match(/cloud_connect=([^&]+)/);
+        if (match) cleanStr = match[1];
+      }
+      const jsonStr = decodeURIComponent(atob(cleanStr));
+      const config = JSON.parse(jsonStr);
+      if (!config || !config.provider) {
+        throw new Error('Data konfigurasi tidak lengkap');
+      }
+      return config;
+    } catch (e) {
+      console.error('Failed to parse pairing payload:', e);
+      throw new Error('Kode atau tautan koneksi tidak valid atau rusak.');
+    }
+  },
+
+  // Terapkan konfigurasi hasil pairing dan langsung sambungkan
+  async applyPairingConfig(config) {
+    if (!config) throw new Error('Konfigurasi tidak valid');
+    this.saveConfig(config);
+    return this.connect(config);
   }
 };

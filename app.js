@@ -52,6 +52,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateConnectionStatus();
   window.addEventListener('online', updateConnectionStatus);
   window.addEventListener('offline', updateConnectionStatus);
+
+  // Check if opened via Magic Pairing URL (#cloud_connect=...)
+  checkPairingUrlOnStartup();
 });
 
 // Update online/offline connection state indicator
@@ -827,11 +830,17 @@ function openPaymentModal() {
   // Set default method
   selectPaymentMethod('Cash');
 
+  // Reset optional note input
+  const noteInput = document.getElementById('payment-order-note');
+  if (noteInput) noteInput.value = '';
+
   // Generate quick cash buttons
   generateQuickCashButtons(totalBill);
 }
 
 function closePaymentModal() {
+  const noteInput = document.getElementById('payment-order-note');
+  if (noteInput) noteInput.value = '';
   document.getElementById('modal-payment').classList.add('hidden');
 }
 
@@ -949,6 +958,10 @@ async function submitTransaction() {
     change = cashPaid - total;
   }
 
+  // Get optional order note
+  const noteEl = document.getElementById('payment-order-note');
+  const orderNote = (noteEl ? noteEl.value : '').trim();
+
   // Create Transaction Record
   const now = new Date();
   const txId = `TR-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(1000 + Math.random() * 9000))}`;
@@ -956,6 +969,7 @@ async function submitTransaction() {
   const transaction = {
     id: txId,
     timestamp: now.getTime(),
+    date: now.toISOString(),
     items: State.cart.map(item => ({
       productId: item.product.id,
       name: item.product.name,
@@ -970,7 +984,8 @@ async function submitTransaction() {
     total: total,
     paymentMethod: State.paymentMethod,
     amountPaid: cashPaid,
-    change: change
+    change: change,
+    note: orderNote
   };
 
   try {
@@ -990,6 +1005,24 @@ async function submitTransaction() {
       const currentSempolStock = await DB.getSempolStock();
       const newSempolStock = Math.max(0, currentSempolStock - sempolSticksDeducted);
       await DB.updateSempolStock(newSempolStock);
+
+      // Record stock mutation log for Sempol Out
+      if (typeof DB.saveStockMutation === 'function') {
+        const txDate = transaction.date ? transaction.date.split('T')[0] : new Date().toISOString().split('T')[0];
+        await DB.saveStockMutation({
+          type: 'sale_out',
+          date: txDate,
+          timestamp: Date.now(),
+          transactionId: transaction.id,
+          tusuk: sempolSticksDeducted,
+          costPerTusuk: 0,
+          totalCost: 0,
+          supplier: '-',
+          description: `Penjualan Kasir (#${transaction.id})`,
+          notes: orderNote ? `Nota #${transaction.id} | Catatan: ${orderNote}` : `Nota #${transaction.id} (${transaction.paymentMethod})`,
+          balanceAfter: newSempolStock
+        });
+      }
     }
 
     // Deduct stocks for non-sempol items
@@ -1076,6 +1109,11 @@ function renderReceipt(tx) {
   const paymentLine = formatReceiptLine(`Bayar (${tx.paymentMethod})`, `Rp ${tx.amountPaid.toLocaleString('id-ID')}`, 40);
   const changeLine = formatReceiptLine("Kembalian", `Rp ${tx.change.toLocaleString('id-ID')}`, 40);
 
+  const orderNote = (tx.note || tx.notes || '').trim();
+  const noteLines = orderNote
+    ? `----------------------------------------\nCatatan: ${orderNote}\n`
+    : '';
+
   const rawReceipt = `========================================
 ${nameLine}
 ${addrLines}
@@ -1091,7 +1129,7 @@ ${totalLine}
 ========================================
 ${paymentLine}
 ${changeLine}
-========================================
+${noteLines}========================================
 ${footerLines}
 ========================================`;
 
@@ -1683,6 +1721,11 @@ async function loadReportData() {
 
   // Load Financial & Operational Expenses Report Data
   await loadFinancialReportData(startTimestamp, endTimestamp, filteredTx);
+
+  // Load Sempol Stock Card Report Data
+  if (typeof loadSempolStockReportData === 'function') {
+    await loadSempolStockReportData();
+  }
 }
 
 function renderTransactionsHistoryTable(txList) {
@@ -1708,7 +1751,10 @@ function renderTransactionsHistoryTable(txList) {
       const dateStr = new Date(tx.timestamp).toLocaleString('id-ID');
       html += `
         <tr class="border-b border-slate-800 hover:bg-slate-900/20 text-xs">
-          <td class="p-4 pl-6 font-mono font-bold text-slate-300">${tx.id}</td>
+          <td class="p-4 pl-6 font-mono font-bold text-slate-300">
+            <div>${tx.id}</div>
+            ${(tx.note || tx.notes) ? `<div class="text-[11px] text-amber-400 font-normal truncate max-w-[220px] mt-0.5" title="${tx.note || tx.notes}"><i class="fa-regular fa-note-sticky text-[10px] mr-1"></i>${tx.note || tx.notes}</div>` : ''}
+          </td>
           <td class="p-4 text-slate-400">${dateStr}</td>
           <td class="p-4 text-center">
             <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -1747,6 +1793,7 @@ function renderTransactionsHistoryTable(txList) {
           <div class="py-4 flex items-center justify-between gap-4 animate-[fadeIn_0.15s_ease-out]">
             <div class="min-w-0">
               <div class="font-mono font-bold text-slate-200 text-sm truncate">${tx.id}</div>
+              ${(tx.note || tx.notes) ? `<div class="text-[11px] text-amber-300/90 flex items-center gap-1 mt-0.5 truncate max-w-[200px]" title="${tx.note || tx.notes}"><i class="fa-regular fa-note-sticky text-[10px]"></i><span>${tx.note || tx.notes}</span></div>` : ''}
               <div class="text-[10px] text-slate-400 flex items-center gap-2 mt-1">
                 <span>${dateStr}</span>
                 <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${
@@ -2198,6 +2245,7 @@ function applyRolePermissions() {
   }
 
   updateAuthUI();
+  updateSempolQuickBarUI();
 }
 
 // ----------------------------------------------------
@@ -2938,6 +2986,243 @@ async function syncDownloadAllHandler() {
   }
 }
 
+// ====================================================
+// CLOUD PAIRING (QR CODE & MAGIC LINK) HANDLERS
+// ====================================================
+
+function openCloudShareModal() {
+  const config = CloudDB.getConfig();
+  if (!config || !config.enabled) {
+    alert('Database eksternal belum dikonfigurasi atau belum aktif. Harap isi form konfigurasi dan klik "Simpan Konfigurasi" terlebih dahulu sebelum membagikannya ke kasir.');
+    return;
+  }
+
+  const modal = document.getElementById('modal-cloud-share');
+  if (!modal) return;
+
+  const activeStore = (typeof DB !== 'undefined' && DB.getActiveStore) ? DB.getActiveStore() : null;
+  const storeName = activeStore ? activeStore.name : 'Toko POS';
+
+  const elStoreName = document.getElementById('cloud-share-store-name');
+  const elDbType = document.getElementById('cloud-share-db-type');
+  if (elStoreName) elStoreName.textContent = storeName;
+  if (elDbType) elDbType.textContent = CloudDB.getProviderName(config.provider);
+
+  const pairingUrl = CloudDB.generatePairingUrl({ storeName });
+  const elInput = document.getElementById('cloud-share-link-input');
+  if (elInput) elInput.value = pairingUrl || '';
+
+  // Generate QR Code
+  const qrContainer = document.getElementById('cloud-share-qrcode-canvas');
+  if (qrContainer) {
+    qrContainer.innerHTML = '';
+    if (typeof QRCode !== 'undefined' && pairingUrl) {
+      new QRCode(qrContainer, {
+        text: pairingUrl,
+        width: 200,
+        height: 200,
+        colorDark: "#0f172a",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else if (pairingUrl) {
+      const img = document.createElement('img');
+      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pairingUrl)}`;
+      img.alt = 'QR Code';
+      img.className = 'w-[200px] h-[200px] rounded-lg';
+      qrContainer.appendChild(img);
+    }
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeCloudShareModal() {
+  const modal = document.getElementById('modal-cloud-share');
+  if (modal) modal.classList.add('hidden');
+}
+
+function copyPairingLink() {
+  const input = document.getElementById('cloud-share-link-input');
+  if (!input || !input.value) return;
+
+  navigator.clipboard.writeText(input.value).then(() => {
+    const btn = document.getElementById('btn-copy-pairing-link');
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check text-emerald-400"></i><span>Tersalin!</span>';
+      setTimeout(() => { btn.innerHTML = orig; }, 2000);
+    }
+    showToast('Tautan koneksi berhasil disalin ke clipboard!', 'success');
+  }).catch(() => {
+    input.select();
+    document.execCommand('copy');
+    showToast('Tautan disalin!', 'success');
+  });
+}
+
+function sharePairingWhatsApp() {
+  const input = document.getElementById('cloud-share-link-input');
+  if (!input || !input.value) return;
+
+  const activeStore = (typeof DB !== 'undefined' && DB.getActiveStore) ? DB.getActiveStore() : null;
+  const storeName = activeStore ? activeStore.name : 'Toko POS';
+  const url = input.value;
+
+  const msg = `Halo Tim Kasir *${storeName}*!\n\nBerikut tautan untuk menyambungkan HP kasir Anda ke database toko:\n\n${url}\n\n*Cara Pakai:*\n1. Klik tautan di atas dari HP kasir Anda\n2. Klik *"Ya, Sambungkan"*\n3. Masuk dengan PIN Kasir (default: 0000)\n\nSelesai, HP kasir langsung tersinkronisasi otomatis!`;
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+let cloudQrScannerInstance = null;
+
+function openCloudScanModal() {
+  const modal = document.getElementById('modal-cloud-scan');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeCloudScanModal() {
+  if (cloudQrScannerInstance) {
+    try {
+      cloudQrScannerInstance.stop().catch(() => {});
+      cloudQrScannerInstance.clear();
+    } catch (_) {}
+    cloudQrScannerInstance = null;
+  }
+  const btn = document.getElementById('btn-start-cloud-camera');
+  if (btn) btn.classList.remove('hidden');
+  const modal = document.getElementById('modal-cloud-scan');
+  if (modal) modal.classList.add('hidden');
+}
+
+function startCloudCameraScanner() {
+  const readerEl = document.getElementById('cloud-qr-reader');
+  const btn = document.getElementById('btn-start-cloud-camera');
+  if (!readerEl) return;
+
+  if (typeof Html5Qrcode === 'undefined') {
+    alert('Fitur scanner kamera tidak didukung di browser ini. Silakan gunakan opsi tempel tautan di bawah.');
+    return;
+  }
+
+  if (btn) btn.classList.add('hidden');
+
+  cloudQrScannerInstance = new Html5Qrcode("cloud-qr-reader");
+  cloudQrScannerInstance.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 200, height: 200 } },
+    async (decodedText) => {
+      try {
+        await cloudQrScannerInstance.stop();
+        cloudQrScannerInstance.clear();
+        cloudQrScannerInstance = null;
+      } catch (_) {}
+
+      closeCloudScanModal();
+      handleScannedPairingCode(decodedText);
+    },
+    (errorMessage) => {
+      // scanning frame loop
+    }
+  ).catch(err => {
+    console.error('Camera start error:', err);
+    if (btn) btn.classList.remove('hidden');
+    alert('Gagal mengakses kamera. Pastikan izin kamera telah diberikan atau gunakan opsi tempel tautan.');
+  });
+}
+
+async function handleScannedPairingCode(codeOrUrl) {
+  try {
+    const config = CloudDB.importPairingPayload(codeOrUrl);
+    showToast(`Menerapkan koneksi ke ${CloudDB.getProviderName(config.provider)}...`, 'info');
+    const connected = await CloudDB.applyPairingConfig(config);
+    if (connected) {
+      State.authSettings = await DB.getAuthSettings();
+      updateAuthUI();
+      showToast(`HP Kasir berhasil tersambung ke database toko!`, 'success');
+      await loadInitialData();
+      if (State.activeView === 'cashier') renderProducts();
+    } else {
+      alert('Koneksi gagal. Periksa jaringan internet perangkat Anda.');
+    }
+  } catch (err) {
+    alert('Kode / tautan QR tidak valid: ' + err.message);
+  }
+}
+
+async function applyPastedPairingLink() {
+  const input = document.getElementById('cloud-scan-pasted-code');
+  const val = input ? input.value.trim() : '';
+  if (!val) {
+    alert('Harap masukkan atau tempel tautan / kode koneksi terlebih dahulu.');
+    return;
+  }
+
+  await handleScannedPairingCode(val);
+  if (input) input.value = '';
+}
+
+async function checkPairingUrlOnStartup() {
+  const hash = window.location.hash || '';
+  if (!hash.includes('cloud_connect=')) return;
+
+  try {
+    const rawPayload = hash.split('cloud_connect=')[1];
+    if (!rawPayload) return;
+
+    const config = CloudDB.importPairingPayload(rawPayload);
+    window._pendingPairingConfig = config;
+
+    const modal = document.getElementById('modal-cloud-pair-confirm');
+    const elStore = document.getElementById('cloud-pair-confirm-store');
+    const elProvider = document.getElementById('cloud-pair-confirm-provider');
+
+    if (elStore) elStore.textContent = config.storeName || 'Toko POS';
+    if (elProvider) elProvider.textContent = CloudDB.getProviderName(config.provider);
+
+    if (modal) modal.classList.remove('hidden');
+  } catch (err) {
+    console.warn('Pairing check failed:', err);
+    showToast('Tautan koneksi database tidak valid.', 'error');
+  }
+}
+
+async function confirmPairingConnect() {
+  const config = window._pendingPairingConfig;
+  const modal = document.getElementById('modal-cloud-pair-confirm');
+  if (!config) {
+    if (modal) modal.classList.add('hidden');
+    return;
+  }
+
+  showToast(`Menghubungkan ke ${CloudDB.getProviderName(config.provider)}...`, 'info');
+  try {
+    const connected = await CloudDB.applyPairingConfig(config);
+    if (connected) {
+      State.authSettings = await DB.getAuthSettings();
+      updateAuthUI();
+      // Clean hash from URL without reloading
+      history.replaceState(null, null, window.location.pathname);
+      if (modal) modal.classList.add('hidden');
+      window._pendingPairingConfig = null;
+      showToast(`Berhasil tersambung ke database toko! Autentikasi kasir aktif.`, 'success');
+      await loadInitialData();
+      if (State.activeView === 'cashier') renderProducts();
+    } else {
+      alert('Gagal terhubung ke database. Pastikan koneksi internet aktif.');
+    }
+  } catch (e) {
+    console.error('Confirm pairing error:', e);
+    alert('Terjadi kesalahan saat menghubungkan: ' + e.message);
+  }
+}
+
+function cancelPairingConnect() {
+  history.replaceState(null, null, window.location.pathname);
+  const modal = document.getElementById('modal-cloud-pair-confirm');
+  if (modal) modal.classList.add('hidden');
+  window._pendingPairingConfig = null;
+}
 
 // ====================================================
 // MOBILE MENU DRAWER (MODAL BOTTOM SHEET)
@@ -3230,6 +3515,15 @@ async function updateSempolQuickBarUI() {
   if (!bar) return;
 
   const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
+  const sempolTabBtn = document.getElementById('btn-tab-report-sempol');
+  if (sempolTabBtn) {
+    if (isSempolMode) {
+      sempolTabBtn.classList.remove('hidden');
+    } else {
+      sempolTabBtn.classList.add('hidden');
+    }
+  }
+
   if (!isSempolMode) {
     bar.classList.add('hidden');
     return;
@@ -3245,26 +3539,96 @@ async function updateSempolQuickBarUI() {
 
   const costEl = document.getElementById('sempol-unit-cost-val');
   if (costEl) costEl.innerText = unitCost.toLocaleString('id-ID');
+
+  const isAdmin = State.currentUser?.role === 'admin';
+
+  // Modal satuan hanya bisa dilihat oleh Admin
+  const costContainer = document.getElementById('sempol-unit-cost-container');
+  if (costContainer) {
+    if (isAdmin) {
+      costContainer.classList.remove('hidden');
+    } else {
+      costContainer.classList.add('hidden');
+    }
+  }
+
+  // Pengaturan stok (tombol quick add, kulakan, atur manual) hanya bisa oleh Admin
+  const actionsContainer = document.getElementById('sempol-quick-actions');
+  if (actionsContainer) {
+    if (isAdmin) {
+      actionsContainer.classList.remove('hidden');
+    } else {
+      actionsContainer.classList.add('hidden');
+    }
+  }
 }
 
 async function quickAddSempolStock(amount) {
+  if (!requireAdmin(() => quickAddSempolStock(amount))) return;
+
   const current = await DB.getSempolStock();
   const newStock = current + amount;
   await DB.updateSempolStock(newStock);
+
+  if (typeof DB.saveStockMutation === 'function') {
+    const sempolProd = State.products.find(p => p.isSempol);
+    const unitCost = sempolProd ? (sempolProd.unitCost || 400) : 400;
+    await DB.saveStockMutation({
+      type: 'supplier_in',
+      date: new Date().toISOString().split('T')[0],
+      timestamp: Date.now(),
+      tusuk: amount,
+      costPerTusuk: unitCost,
+      totalCost: amount * unitCost,
+      supplier: 'Tambah Cepat (+)',
+      description: `Quick Add (+${amount} Tusuk)`,
+      notes: 'Pintas bar kasir',
+      balanceAfter: newStock
+    });
+  }
+
   await loadInitialData();
   renderProducts();
   showToast(`+${amount} Tusuk sempol berhasil ditambahkan! Total sekarang: ${newStock} tusuk.`, 'success');
 }
 
-function openSempolStockModal() {
+let sempolStockModalTab = 'purchase';
+
+function openSempolStockModal(initialTab = 'purchase') {
+  if (!requireAdmin(() => openSempolStockModal(initialTab))) return;
+
   const modal = document.getElementById('modal-sempol-stock');
   if (!modal) return;
   const sempolProd = State.products.find(p => p.isSempol);
   const stock = sempolProd ? sempolProd.stock : 100;
   const unitCost = sempolProd ? (sempolProd.unitCost || 400) : 400;
 
-  document.getElementById('input-modal-sempol-stock').value = stock;
-  document.getElementById('input-modal-sempol-cost').value = unitCost;
+  // Set default manual form values
+  const inputStock = document.getElementById('input-modal-sempol-stock');
+  if (inputStock) inputStock.value = stock;
+  const inputCost = document.getElementById('input-modal-sempol-cost');
+  if (inputCost) inputCost.value = unitCost;
+
+  // Set default purchase form values
+  const purchaseDate = document.getElementById('input-sempol-purchase-date');
+  if (purchaseDate) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    purchaseDate.value = `${yyyy}-${mm}-${dd}`;
+  }
+  const purchaseAmount = document.getElementById('input-sempol-purchase-amount');
+  if (purchaseAmount) purchaseAmount.value = '';
+  const purchaseCost = document.getElementById('input-sempol-purchase-cost');
+  if (purchaseCost) purchaseCost.value = unitCost;
+  const purchaseSupplier = document.getElementById('input-sempol-purchase-supplier');
+  if (purchaseSupplier) purchaseSupplier.value = '';
+  const purchaseNotes = document.getElementById('input-sempol-purchase-notes');
+  if (purchaseNotes) purchaseNotes.value = '';
+
+  calcSempolPurchaseTotal();
+  switchSempolModalTab(initialTab);
   modal.classList.remove('hidden');
 }
 
@@ -3273,15 +3637,157 @@ function closeSempolStockModal() {
   if (modal) modal.classList.add('hidden');
 }
 
+function switchSempolModalTab(tab) {
+  sempolStockModalTab = tab;
+  const btnPurchase = document.getElementById('btn-sempol-tab-purchase');
+  const btnManual = document.getElementById('btn-sempol-tab-manual');
+  const formPurchase = document.getElementById('form-sempol-purchase');
+  const formManual = document.getElementById('form-sempol-stock');
+
+  if (tab === 'purchase') {
+    formPurchase?.classList.remove('hidden');
+    formManual?.classList.add('hidden');
+    if (btnPurchase) {
+      btnPurchase.className = "py-1.5 px-3 rounded-lg text-xs font-bold transition-all bg-amber-500 text-dark-950 flex items-center justify-center gap-1.5 shadow-sm";
+    }
+    if (btnManual) {
+      btnManual.className = "py-1.5 px-3 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/60 flex items-center justify-center gap-1.5";
+    }
+  } else {
+    formPurchase?.classList.add('hidden');
+    formManual?.classList.remove('hidden');
+    if (btnManual) {
+      btnManual.className = "py-1.5 px-3 rounded-lg text-xs font-bold transition-all bg-amber-500 text-dark-950 flex items-center justify-center gap-1.5 shadow-sm";
+    }
+    if (btnPurchase) {
+      btnPurchase.className = "py-1.5 px-3 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/60 flex items-center justify-center gap-1.5";
+    }
+  }
+}
+
+function setSempolPurchaseQty(amt) {
+  const input = document.getElementById('input-sempol-purchase-amount');
+  if (input) {
+    const current = Number(input.value) || 0;
+    input.value = current + amt;
+    calcSempolPurchaseTotal();
+  }
+}
+
+function calcSempolPurchaseTotal() {
+  const qty = Number(document.getElementById('input-sempol-purchase-amount')?.value) || 0;
+  const cost = Number(document.getElementById('input-sempol-purchase-cost')?.value) || 400;
+  const total = qty * cost;
+
+  const previewTotal = document.getElementById('sempol-purchase-total-preview');
+  if (previewTotal) previewTotal.innerText = `Rp ${total.toLocaleString('id-ID')}`;
+
+  const sempolProd = State.products.find(p => p.isSempol);
+  const currentStock = sempolProd ? sempolProd.stock : 0;
+  const afterStock = currentStock + qty;
+
+  const previewAfter = document.getElementById('sempol-purchase-after-preview');
+  if (previewAfter) previewAfter.innerText = `${afterStock} Tusuk`;
+}
+
 function adjustSempolModalStock(amt) {
   const input = document.getElementById('input-modal-sempol-stock');
   input.value = Math.max(0, (Number(input.value) || 0) + amt);
 }
 
+async function saveSempolPurchaseHandler(e) {
+  e.preventDefault();
+  if (!requireAdmin(() => {})) return;
+
+  const dateStr = document.getElementById('input-sempol-purchase-date').value;
+  const qty = Number(document.getElementById('input-sempol-purchase-amount').value) || 0;
+  const unitCost = Number(document.getElementById('input-sempol-purchase-cost').value) || 400;
+  const supplier = (document.getElementById('input-sempol-purchase-supplier').value || '').trim() || 'Supplier Tusuk Sempol';
+  const notes = (document.getElementById('input-sempol-purchase-notes').value || '').trim();
+  const syncExpense = document.getElementById('check-sempol-purchase-sync-expense')?.checked !== false;
+
+  if (qty <= 0) {
+    alert('Jumlah tusuk masuk harus lebih dari 0.');
+    return;
+  }
+
+  const currentStock = await DB.getSempolStock();
+  const newStock = currentStock + qty;
+  const totalCost = qty * unitCost;
+
+  // 1. Update all sempol products stock and modal
+  const products = await DB.getProducts();
+  for (const p of products) {
+    if (p.isSempol) {
+      p.stock = newStock;
+      p.unitCost = unitCost;
+      p.cost = (p.piecesPerUnit || 1) * unitCost;
+      await DB.saveProduct(p);
+    }
+  }
+
+  // Parse custom date timestamp
+  let timestamp = Date.now();
+  if (dateStr) {
+    const parsed = new Date(dateStr + 'T12:00:00');
+    if (!isNaN(parsed.getTime())) {
+      timestamp = parsed.getTime();
+    }
+  }
+
+  // 2. Save stock mutation log
+  if (typeof DB.saveStockMutation === 'function') {
+    await DB.saveStockMutation({
+      type: 'supplier_in',
+      date: dateStr || new Date().toISOString().split('T')[0],
+      timestamp: timestamp,
+      tusuk: qty,
+      costPerTusuk: unitCost,
+      totalCost: totalCost,
+      supplier: supplier,
+      description: `Beli dari ${supplier}`,
+      notes: notes || 'Kulakan bahan baku tusuk',
+      balanceAfter: newStock
+    });
+  }
+
+  // 3. Sync to Expenses (Buku Kas) if checked
+  if (syncExpense && typeof DB.saveExpense === 'function') {
+    await DB.saveExpense({
+      type: 'operational',
+      category: 'Bahan Baku',
+      title: `Kulakan Sempol: ${qty} Tusuk (${supplier})`,
+      amount: totalCost,
+      date: dateStr || new Date().toISOString().split('T')[0],
+      notes: notes ? `Nota: ${notes} | @ Rp ${unitCost}/tusuk` : `@ Rp ${unitCost}/tusuk`,
+      timestamp: timestamp
+    });
+  }
+
+  await loadInitialData();
+  renderProducts();
+  closeSempolStockModal();
+
+  // If in reports view, refresh report data
+  if (State.activeView === 'reports') {
+    await loadReportData();
+    if (typeof loadSempolStockReportData === 'function') {
+      await loadSempolStockReportData();
+    }
+  }
+
+  showToast(`+${qty} Tusuk sempol dari "${supplier}" berhasil dicatat! Sisa stok sekarang: ${newStock} tusuk.`, 'success');
+}
+
 async function saveSempolStockHandler(e) {
   e.preventDefault();
+  if (!requireAdmin(() => {})) return;
+
   const stock = Number(document.getElementById('input-modal-sempol-stock').value) || 0;
   const unitCost = Number(document.getElementById('input-modal-sempol-cost').value) || 400;
+
+  const currentStock = await DB.getSempolStock();
+  const diff = stock - currentStock;
 
   const products = await DB.getProducts();
   for (const p of products) {
@@ -3293,9 +3799,33 @@ async function saveSempolStockHandler(e) {
     }
   }
 
+  // Record adjustment mutation
+  if (typeof DB.saveStockMutation === 'function') {
+    await DB.saveStockMutation({
+      type: 'adjustment',
+      date: new Date().toISOString().split('T')[0],
+      timestamp: Date.now(),
+      tusuk: diff,
+      costPerTusuk: unitCost,
+      totalCost: 0,
+      supplier: 'Koreksi Fisik',
+      description: `Stok Opname Manual (${diff >= 0 ? '+' : ''}${diff} Tusuk)`,
+      notes: `Penyesuaian sisa stok menjadi ${stock} tusuk`,
+      balanceAfter: stock
+    });
+  }
+
   await loadInitialData();
   renderProducts();
   closeSempolStockModal();
+
+  if (State.activeView === 'reports') {
+    await loadReportData();
+    if (typeof loadSempolStockReportData === 'function') {
+      await loadSempolStockReportData();
+    }
+  }
+
   showToast(`Stok Sempol berhasil diperbarui: ${stock} Tusuk (Modal: Rp ${unitCost}/tusuk)!`, 'success');
 }
 
@@ -3307,28 +3837,40 @@ async function saveSempolStockHandler(e) {
 function switchReportTab(tab) {
   const salesBtn = document.getElementById('btn-tab-report-sales');
   const financeBtn = document.getElementById('btn-tab-report-finance');
+  const sempolBtn = document.getElementById('btn-tab-report-sempol');
+
   const salesContent = document.getElementById('report-tab-sales-content');
   const financeContent = document.getElementById('report-tab-finance-content');
+  const sempolContent = document.getElementById('report-tab-sempol-content');
+
+  // Reset all contents
+  salesContent?.classList.add('hidden');
+  financeContent?.classList.add('hidden');
+  sempolContent?.classList.add('hidden');
+
+  const normalClass = "flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/50 whitespace-nowrap flex-shrink-0";
+
+  if (salesBtn) salesBtn.className = normalClass;
+  if (financeBtn) financeBtn.className = normalClass;
+  if (sempolBtn) sempolBtn.className = normalClass;
 
   if (tab === 'sales') {
     salesContent?.classList.remove('hidden');
-    financeContent?.classList.add('hidden');
     if (salesBtn) {
-      salesBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-primary-600 text-white shadow-glow-primary";
+      salesBtn.className = "flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-primary-600 text-white shadow-glow-primary whitespace-nowrap flex-shrink-0";
     }
-    if (financeBtn) {
-      financeBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/50";
-    }
-  } else {
-    salesContent?.classList.add('hidden');
+  } else if (tab === 'finance') {
     financeContent?.classList.remove('hidden');
     if (financeBtn) {
-      financeBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-lg";
-    }
-    if (salesBtn) {
-      salesBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white hover:bg-slate-800/50";
+      financeBtn.className = "flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-lg whitespace-nowrap flex-shrink-0";
     }
     loadFinancialReportData();
+  } else if (tab === 'sempol') {
+    sempolContent?.classList.remove('hidden');
+    if (sempolBtn) {
+      sempolBtn.className = "flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-amber-500 text-dark-950 shadow-lg whitespace-nowrap flex-shrink-0";
+    }
+    loadSempolStockReportData();
   }
 }
 
@@ -3699,6 +4241,263 @@ function renderExpensesTable(expenseList) {
       mobList.innerHTML = mHtml;
     }
   }
+}
+
+// ====================================================
+// SEMPOL STOCK MUTATION & SUPPLIER RESTOCK REPORT CARD
+// ====================================================
+
+let currentSempolFilter = 'today';
+
+function setSempolStockFilter(period) {
+  currentSempolFilter = period;
+  const btns = {
+    today: document.getElementById('btn-sempol-filter-today'),
+    week: document.getElementById('btn-sempol-filter-week'),
+    month: document.getElementById('btn-sempol-filter-month'),
+    all: document.getElementById('btn-sempol-filter-all')
+  };
+
+  Object.entries(btns).forEach(([p, btn]) => {
+    if (!btn) return;
+    if (p === period) {
+      btn.className = "px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-amber-500 text-dark-950";
+    } else {
+      btn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+    }
+  });
+
+  loadSempolStockReportData();
+}
+
+async function loadSempolStockReportData() {
+  const sempolProd = State.products.find(p => p.isSempol);
+  const currentStock = sempolProd ? sempolProd.stock : 0;
+  const unitCost = sempolProd ? (sempolProd.unitCost || 400) : 400;
+
+  // Determine date range
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  
+  let startTimestamp = null;
+  let endTimestamp = null;
+  let badgeLabel = 'Periode: Hari Ini';
+
+  if (currentSempolFilter === 'today') {
+    startTimestamp = new Date(todayStr + 'T00:00:00').getTime();
+    endTimestamp = new Date(todayStr + 'T23:59:59').getTime();
+    badgeLabel = `Periode: Hari Ini (${todayStr})`;
+  } else if (currentSempolFilter === 'week') {
+    const weekAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const weekAgoStr = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth() + 1).padStart(2, '0')}-${String(weekAgo.getDate()).padStart(2, '0')}`;
+    startTimestamp = new Date(weekAgoStr + 'T00:00:00').getTime();
+    endTimestamp = new Date(todayStr + 'T23:59:59').getTime();
+    badgeLabel = `Periode: 7 Hari Terakhir (${weekAgoStr} s/d ${todayStr})`;
+  } else if (currentSempolFilter === 'month') {
+    const monthStartStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    startTimestamp = new Date(monthStartStr + 'T00:00:00').getTime();
+    endTimestamp = new Date(todayStr + 'T23:59:59').getTime();
+    badgeLabel = `Periode: Bulan Ini (${now.toLocaleString('id-ID', { month: 'long', year: 'numeric' })})`;
+  } else {
+    badgeLabel = 'Periode: Keseluruhan (All Time)';
+  }
+
+  const periodBadge = document.getElementById('sempol-mutation-period-badge');
+  if (periodBadge) periodBadge.innerText = badgeLabel;
+
+  // Fetch mutations and transactions
+  const allMutations = (typeof DB.getStockMutations === 'function') ? await DB.getStockMutations() : [];
+  const allTransactions = await DB.getTransactions();
+
+  // Combine sale events from transactions if not yet recorded in mutations
+  const recordedTxIds = new Set(allMutations.filter(m => m.transactionId).map(m => m.transactionId));
+  const syntheticMutations = [];
+
+  allTransactions.forEach(tx => {
+    if (!recordedTxIds.has(tx.id)) {
+      let sempolQty = 0;
+      tx.items.forEach(item => {
+        if (item.isSempol) {
+          sempolQty += (item.piecesPerUnit || 1) * item.quantity;
+        }
+      });
+      if (sempolQty > 0) {
+        syntheticMutations.push({
+          id: 'tx_' + tx.id,
+          type: 'sale_out',
+          date: tx.date ? tx.date.split('T')[0] : (tx.timestamp ? new Date(tx.timestamp).toISOString().split('T')[0] : todayStr),
+          timestamp: tx.timestamp || Date.now(),
+          transactionId: tx.id,
+          tusuk: sempolQty,
+          costPerTusuk: 0,
+          totalCost: 0,
+          supplier: '-',
+          description: `Penjualan Kasir (#${tx.id})`,
+          notes: `Nota #${tx.id} (${tx.paymentMethod})`,
+          balanceAfter: '-'
+        });
+      }
+    }
+  });
+
+  const fullMutations = [...allMutations, ...syntheticMutations];
+
+  // Filter mutations by range
+  const filteredMutations = fullMutations.filter(m => {
+    if (!startTimestamp || !endTimestamp) return true;
+    const t = m.timestamp || (m.date ? new Date(m.date + 'T12:00:00').getTime() : 0);
+    return t >= startTimestamp && t <= endTimestamp;
+  });
+
+  // Calculate Metrics
+  let totalInTusuk = 0;
+  let totalInCost = 0;
+  let totalOutTusuk = 0;
+  let totalOutTxCount = 0;
+
+  filteredMutations.forEach(m => {
+    if (m.type === 'supplier_in') {
+      totalInTusuk += Number(m.tusuk || 0);
+      totalInCost += Number(m.totalCost || (m.tusuk * (m.costPerTusuk || 0)));
+    } else if (m.type === 'sale_out') {
+      totalOutTusuk += Number(m.tusuk || 0);
+      totalOutTxCount++;
+    }
+  });
+
+  const totalAssetVal = currentStock * unitCost;
+
+  // Render Metric Cards
+  const elIn = document.getElementById('sempol-stat-in');
+  if (elIn) elIn.innerText = `+${totalInTusuk.toLocaleString('id-ID')} Tusuk`;
+  const elInCost = document.getElementById('sempol-stat-in-cost');
+  if (elInCost) elInCost.innerText = `Total Modal: Rp ${totalInCost.toLocaleString('id-ID')}`;
+
+  const elOut = document.getElementById('sempol-stat-out');
+  if (elOut) elOut.innerText = `-${totalOutTusuk.toLocaleString('id-ID')} Tusuk`;
+  const elOutTx = document.getElementById('sempol-stat-out-tx');
+  if (elOutTx) elOutTx.innerText = `Dari ${totalOutTxCount} transaksi penjualan`;
+
+  const elCurrent = document.getElementById('sempol-stat-current');
+  if (elCurrent) elCurrent.innerText = `${currentStock.toLocaleString('id-ID')} Tusuk`;
+
+  const elAsset = document.getElementById('sempol-stat-asset-val');
+  if (elAsset) elAsset.innerText = `Rp ${totalAssetVal.toLocaleString('id-ID')}`;
+  const elUnitCost = document.getElementById('sempol-stat-unit-cost');
+  if (elUnitCost) elUnitCost.innerText = `Modal Rp ${unitCost.toLocaleString('id-ID')} / tusuk`;
+
+  // Render Table & Mobile List
+  renderSempolMutationsTable(filteredMutations);
+}
+
+function renderSempolMutationsTable(list) {
+  const tbody = document.getElementById('sempol-mutations-table-body');
+  const mobList = document.getElementById('sempol-mutations-mobile-list');
+  if (!tbody) return;
+
+  if (!list || list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="p-8 text-center text-slate-500">
+          <i class="fa-solid fa-boxes-stacked text-3xl mb-2 opacity-30"></i>
+          <p class="text-xs">Belum ada riwayat mutasi stok tusuk pada periode ini.</p>
+          <button onclick="openSempolStockModal('purchase')" class="mt-2 text-amber-400 hover:text-amber-300 font-bold text-xs underline">Catat Kulakan Supplier Sekarang</button>
+        </td>
+      </tr>
+    `;
+    if (mobList) {
+      mobList.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Belum ada riwayat mutasi pada periode ini.</div>`;
+    }
+    return;
+  }
+
+  // Sort descending by timestamp
+  const sorted = [...list].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  let htmlDesktop = '';
+  let htmlMobile = '';
+
+  sorted.forEach(m => {
+    const isSupplier = m.type === 'supplier_in';
+    const isSale = m.type === 'sale_out';
+
+    let badge = '';
+    let qtySign = '';
+    let qtyColor = '';
+
+    if (isSupplier) {
+      badge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Kulakan Masuk</span>';
+      qtySign = `+${m.tusuk}`;
+      qtyColor = 'text-amber-400 font-extrabold';
+    } else if (isSale) {
+      badge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Terjual Kasir</span>';
+      qtySign = `-${m.tusuk}`;
+      qtyColor = 'text-emerald-400 font-extrabold';
+    } else {
+      badge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">Koreksi Manual</span>';
+      qtySign = (m.tusuk >= 0 ? `+${m.tusuk}` : `${m.tusuk}`);
+      qtyColor = 'text-sky-300 font-bold';
+    }
+
+    const dateFormatted = m.date || (m.timestamp ? new Date(m.timestamp).toLocaleDateString('id-ID') : '-');
+    const timeFormatted = m.timestamp ? new Date(m.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+    const supplierText = m.supplier || m.description || '-';
+    const notesText = m.notes || '-';
+    const totalCostText = m.totalCost ? `Rp ${Number(m.totalCost).toLocaleString('id-ID')}` : '-';
+    const balanceText = (m.balanceAfter !== undefined && m.balanceAfter !== null && m.balanceAfter !== '-') ? `${m.balanceAfter} Tusuk` : '-';
+
+    const canDelete = (isSupplier || m.type === 'adjustment') && typeof m.id === 'number';
+    const deleteBtn = canDelete
+      ? `<button onclick="deleteSempolMutationPrompt(${m.id})" class="text-slate-500 hover:text-rose-400 transition-colors p-1" title="Hapus Catatan Mutasi"><i class="fa-regular fa-trash-can"></i></button>`
+      : '<span class="text-slate-600">-</span>';
+
+    htmlDesktop += `
+      <tr class="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+        <td class="p-3.5 pl-5 text-slate-300">
+          <div class="font-medium">${dateFormatted}</div>
+          <div class="text-[10px] text-slate-500">${timeFormatted}</div>
+        </td>
+        <td class="p-3.5">${badge}</td>
+        <td class="p-3.5 font-medium text-slate-200">${supplierText}</td>
+        <td class="p-3.5 text-slate-400 max-w-xs truncate">${notesText}</td>
+        <td class="p-3.5 text-center ${qtyColor} text-sm">${qtySign} Tusuk</td>
+        <td class="p-3.5 text-right font-semibold text-slate-300">${totalCostText}</td>
+        <td class="p-3.5 text-center font-bold text-slate-200">${balanceText}</td>
+        <td class="p-3.5 text-center pr-5">${deleteBtn}</td>
+      </tr>
+    `;
+
+    htmlMobile += `
+      <div class="pt-3 pb-2 flex justify-between items-start">
+        <div class="space-y-1">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            ${badge}
+            <span class="text-[11px] text-slate-400">${dateFormatted} ${timeFormatted}</span>
+          </div>
+          <p class="font-bold text-slate-200 text-xs">${supplierText}</p>
+          ${notesText !== '-' ? `<p class="text-[11px] text-slate-400">${notesText}</p>` : ''}
+          ${totalCostText !== '-' ? `<p class="text-[11px] text-amber-300/90 font-medium">Biaya: ${totalCostText}</p>` : ''}
+        </div>
+        <div class="text-right space-y-1">
+          <span class="${qtyColor} text-sm block">${qtySign} Tusuk</span>
+          <span class="text-[10px] text-slate-400 block">Saldo: ${balanceText}</span>
+          ${canDelete ? `<button onclick="deleteSempolMutationPrompt(${m.id})" class="text-rose-400 text-xs font-semibold hover:underline">Hapus</button>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  tbody.innerHTML = htmlDesktop;
+  if (mobList) mobList.innerHTML = htmlMobile;
+}
+
+async function deleteSempolMutationPrompt(id) {
+  if (!confirm('Yakin ingin menghapus catatan mutasi ini?')) return;
+  if (typeof DB.deleteStockMutation === 'function') {
+    await DB.deleteStockMutation(id);
+  }
+  await loadSempolStockReportData();
+  showToast('Catatan mutasi berhasil dihapus.', 'info');
 }
 
 
