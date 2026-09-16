@@ -3044,9 +3044,19 @@ function closeCloudShareModal() {
 
 function copyPairingLink() {
   const input = document.getElementById('cloud-share-link-input');
-  if (!input || !input.value) return;
+  let val = input ? input.value : '';
+  if (!val) {
+    const activeStore = (typeof DB !== 'undefined' && DB.getActiveStore) ? DB.getActiveStore() : null;
+    const storeName = activeStore ? activeStore.name : 'Toko POS';
+    val = CloudDB.generatePairingUrl({ storeName });
+    if (input) input.value = val;
+  }
+  if (!val) {
+    alert('Konfigurasi database belum tersedia.');
+    return;
+  }
 
-  navigator.clipboard.writeText(input.value).then(() => {
+  const successFeedback = () => {
     const btn = document.getElementById('btn-copy-pairing-link');
     if (btn) {
       const orig = btn.innerHTML;
@@ -3054,24 +3064,55 @@ function copyPairingLink() {
       setTimeout(() => { btn.innerHTML = orig; }, 2000);
     }
     showToast('Tautan koneksi berhasil disalin ke clipboard!', 'success');
-  }).catch(() => {
-    input.select();
-    document.execCommand('copy');
-    showToast('Tautan disalin!', 'success');
-  });
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(val).then(successFeedback).catch(() => {
+      if (input) { input.select(); document.execCommand('copy'); }
+      successFeedback();
+    });
+  } else {
+    if (input) { input.select(); document.execCommand('copy'); }
+    successFeedback();
+  }
 }
 
 function sharePairingWhatsApp() {
-  const input = document.getElementById('cloud-share-link-input');
-  if (!input || !input.value) return;
+  let url = document.getElementById('cloud-share-link-input')?.value;
+  if (!url) {
+    const activeStore = (typeof DB !== 'undefined' && DB.getActiveStore) ? DB.getActiveStore() : null;
+    const storeName = activeStore ? activeStore.name : 'Toko POS';
+    url = CloudDB.generatePairingUrl({ storeName });
+    const input = document.getElementById('cloud-share-link-input');
+    if (input) input.value = url;
+  }
+  if (!url) {
+    alert('Konfigurasi database belum tersimpan atau belum aktif. Silakan simpan konfigurasi terlebih dahulu.');
+    return;
+  }
 
   const activeStore = (typeof DB !== 'undefined' && DB.getActiveStore) ? DB.getActiveStore() : null;
   const storeName = activeStore ? activeStore.name : 'Toko POS';
-  const url = input.value;
 
   const msg = `Halo Tim Kasir *${storeName}*!\n\nBerikut tautan untuk menyambungkan HP kasir Anda ke database toko:\n\n${url}\n\n*Cara Pakai:*\n1. Klik tautan di atas dari HP kasir Anda\n2. Klik *"Ya, Sambungkan"*\n3. Masuk dengan PIN Kasir (default: 0000)\n\nSelesai, HP kasir langsung tersinkronisasi otomatis!`;
 
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  // Backup: Salin link ke clipboard otomatis
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).catch(() => {});
+  }
+
+  const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+  
+  // Coba buka WhatsApp di tab baru, jika diblokir popup blocker buka via redirect
+  try {
+    const win = window.open(waUrl, '_blank');
+    if (!win || win.closed || typeof win.closed === 'undefined') {
+      window.location.href = waUrl;
+    }
+  } catch (_) {
+    window.location.href = waUrl;
+  }
+  showToast('Membuka WhatsApp & tautan disalin!', 'info');
 }
 
 let cloudQrScannerInstance = null;
