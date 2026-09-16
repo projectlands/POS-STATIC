@@ -373,7 +373,7 @@ const DB = {
     }
     if (!mutation.timestamp) mutation.timestamp = Date.now();
     if (!mutation.date) mutation.date = new Date().toISOString().split('T')[0];
-    return this.execute('stock_mutations', 'readwrite', (store) => {
+    const resId = await this.execute('stock_mutations', 'readwrite', (store) => {
       if (mutation.id) {
         mutation.id = Number(mutation.id);
         return store.put(mutation);
@@ -381,13 +381,22 @@ const DB = {
         return store.add(mutation);
       }
     });
+    const savedMutation = { ...mutation, id: mutation.id || resId };
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.syncStockMutation(savedMutation).catch(console.error);
+    }
+    return resId;
   },
 
-  deleteStockMutation(id) {
+  async deleteStockMutation(id) {
     if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
       return Promise.resolve(false);
     }
-    return this.execute('stock_mutations', 'readwrite', (store) => store.delete(Number(id)));
+    const res = await this.execute('stock_mutations', 'readwrite', (store) => store.delete(Number(id)));
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.deleteStockMutation(id).catch(console.error);
+    }
+    return res;
   },
 
   // Helper untuk mendapatkan stok bahan tusuk sempol

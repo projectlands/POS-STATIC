@@ -17,6 +17,7 @@ const CloudDB = {
   statusMessage: 'Database eksternal belum dikonfigurasi',
   provider: 'sheets', // 'sheets' | 'mysql' | 'firebase'
   onStatusChange: null,
+  unsubscribers: [],
 
   // Inisialisasi CloudDB dari localStorage
   async init() {
@@ -139,6 +140,7 @@ const CloudDB = {
 
         this.setStatus('connected', 'Terhubung ke Firebase Firestore Cloud');
         await this.enforceAuthRequirement();
+        this.startRealtimeListeners();
         return true;
       }
     } catch (err) {
@@ -210,6 +212,7 @@ const CloudDB = {
 
   // Putus koneksi
   disconnect() {
+    this.stopRealtimeListeners();
     this.firestore = null;
     this.isConfigured = false;
     this.setStatus('disconnected', 'Mode Database Dinonaktifkan (Lokal Saja)');
@@ -313,6 +316,173 @@ const CloudDB = {
       console.log('Expense synced to remote database:', expense.title);
     } catch (err) {
       console.error('Failed to sync expense:', err);
+    }
+  },
+
+  async syncStockMutation(mutation) {
+    if (!this.isEnabled) return;
+    const config = this.getConfig();
+    if (!config) return;
+
+    try {
+      if (this.firestore) {
+        await this.firestore.collection('stock_mutations').doc(String(mutation.id || Date.now())).set({
+          ...mutation,
+          _syncedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log('Stock mutation synced to Firestore:', mutation.id);
+      }
+    } catch (err) {
+      console.error('Failed to sync stock mutation:', err);
+    }
+  },
+
+  async deleteStockMutation(id) {
+    if (!this.isEnabled) return;
+    try {
+      if (this.firestore) {
+        await this.firestore.collection('stock_mutations').doc(String(id)).delete();
+        console.log('Stock mutation deleted from Firestore:', id);
+      }
+    } catch (err) {
+      console.error('Failed to delete stock mutation in Firestore:', err);
+    }
+  },
+
+  // --- Realtime Multi-Device Listeners ---
+
+  stopRealtimeListeners() {
+    if (this.unsubscribers && this.unsubscribers.length > 0) {
+      console.log(`[CloudDB] Stopping ${this.unsubscribers.length} active Firestore realtime listeners`);
+      this.unsubscribers.forEach(unsub => {
+        try { if (typeof unsub === 'function') unsub(); } catch (_) {}
+      });
+      this.unsubscribers = [];
+    }
+  },
+
+  startRealtimeListeners() {
+    this.stopRealtimeListeners();
+    if (!this.firestore || typeof DB === 'undefined') return;
+
+    console.log('[CloudDB] Starting Firestore Realtime Listeners for instant multi-device sync...');
+
+    // 1. Realtime Products & Sempol Stock
+    try {
+      const unsubProducts = this.firestore.collection('products').onSnapshot(async (snapshot) => {
+        let hasChanges = false;
+        for (const change of snapshot.docChanges()) {
+          const docData = change.doc.data();
+          if (!docData) continue;
+          delete docData._syncedAt;
+          if (docData.id) docData.id = Number(docData.id);
+
+          if (change.type === 'added' || change.type === 'modified') {
+            await DB.execute('products', 'readwrite', (store) => store.put(docData));
+            hasChanges = true;
+          } else if (change.type === 'removed') {
+            if (docData.id) {
+              await DB.execute('products', 'readwrite', (store) => store.delete(Number(docData.id)));
+              hasChanges = true;
+            }
+          }
+        }
+        if (hasChanges && typeof window.onCloudProductsUpdated === 'function') {
+          window.onCloudProductsUpdated();
+        }
+      }, (err) => console.warn('[CloudDB] Products realtime error:', err));
+      this.unsubscribers.push(unsubProducts);
+    } catch (e) {
+      console.warn('Failed to start products listener:', e);
+    }
+
+    // 2. Realtime Expenses
+    try {
+      const unsubExpenses = this.firestore.collection('expenses').onSnapshot(async (snapshot) => {
+        let hasChanges = false;
+        for (const change of snapshot.docChanges()) {
+          const docData = change.doc.data();
+          if (!docData) continue;
+          delete docData._syncedAt;
+          if (docData.id) docData.id = Number(docData.id);
+
+          if (change.type === 'added' || change.type === 'modified') {
+            await DB.execute('expenses', 'readwrite', (store) => store.put(docData));
+            hasChanges = true;
+          } else if (change.type === 'removed') {
+            if (docData.id) {
+              await DB.execute('expenses', 'readwrite', (store) => store.delete(Number(docData.id)));
+              hasChanges = true;
+            }
+          }
+        }
+        if (hasChanges && typeof window.onCloudExpensesUpdated === 'function') {
+          window.onCloudExpensesUpdated();
+        }
+      }, (err) => console.warn('[CloudDB] Expenses realtime error:', err));
+      this.unsubscribers.push(unsubExpenses);
+    } catch (e) {
+      console.warn('Failed to start expenses listener:', e);
+    }
+
+    // 3. Realtime Transactions
+    try {
+      const unsubTransactions = this.firestore.collection('transactions').onSnapshot(async (snapshot) => {
+        let hasChanges = false;
+        for (const change of snapshot.docChanges()) {
+          const docData = change.doc.data();
+          if (!docData) continue;
+          delete docData._syncedAt;
+          if (docData.id) docData.id = Number(docData.id);
+
+          if (change.type === 'added' || change.type === 'modified') {
+            await DB.execute('transactions', 'readwrite', (store) => store.put(docData));
+            hasChanges = true;
+          } else if (change.type === 'removed') {
+            if (docData.id) {
+              await DB.execute('transactions', 'readwrite', (store) => store.delete(Number(docData.id)));
+              hasChanges = true;
+            }
+          }
+        }
+        if (hasChanges && typeof window.onCloudTransactionsUpdated === 'function') {
+          window.onCloudTransactionsUpdated();
+        }
+      }, (err) => console.warn('[CloudDB] Transactions realtime error:', err));
+      this.unsubscribers.push(unsubTransactions);
+    } catch (e) {
+      console.warn('Failed to start transactions listener:', e);
+    }
+
+    // 4. Realtime Stock Mutations (Kulakan & Stok Opname)
+    try {
+      const unsubMutations = this.firestore.collection('stock_mutations').onSnapshot(async (snapshot) => {
+        let hasChanges = false;
+        for (const change of snapshot.docChanges()) {
+          const docData = change.doc.data();
+          if (!docData) continue;
+          delete docData._syncedAt;
+          if (docData.id) docData.id = Number(docData.id);
+
+          if (DB.db && DB.db.objectStoreNames.contains('stock_mutations')) {
+            if (change.type === 'added' || change.type === 'modified') {
+              await DB.execute('stock_mutations', 'readwrite', (store) => store.put(docData));
+              hasChanges = true;
+            } else if (change.type === 'removed') {
+              if (docData.id) {
+                await DB.execute('stock_mutations', 'readwrite', (store) => store.delete(Number(docData.id)));
+                hasChanges = true;
+              }
+            }
+          }
+        }
+        if (hasChanges && typeof window.onCloudMutationsUpdated === 'function') {
+          window.onCloudMutationsUpdated();
+        }
+      }, (err) => console.warn('[CloudDB] Stock mutations realtime error:', err));
+      this.unsubscribers.push(unsubMutations);
+    } catch (e) {
+      console.warn('Failed to start stock mutations listener:', e);
     }
   },
 

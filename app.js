@@ -3266,6 +3266,64 @@ function cancelPairingConnect() {
 }
 
 // ====================================================
+// FIRESTORE REALTIME SYNC UI UPDATERS
+// ====================================================
+
+window.onCloudProductsUpdated = async function() {
+  try {
+    console.log('[Realtime] Products updated from cloud, updating UI...');
+    State.products = await DB.getProducts();
+    if (State.activeView === 'cashier') {
+      renderProducts();
+      updateSempolQuickBarUI();
+    } else if (State.activeView === 'products') {
+      renderInventoryTable();
+    } else if (State.activeView === 'reports') {
+      updateSempolQuickBarUI();
+      if (typeof loadSempolStockReportData === 'function') {
+        loadSempolStockReportData();
+      }
+    }
+  } catch (e) {
+    console.error('onCloudProductsUpdated error:', e);
+  }
+};
+
+window.onCloudExpensesUpdated = async function() {
+  try {
+    console.log('[Realtime] Expenses updated from cloud, updating UI...');
+    if (State.activeView === 'reports' && typeof loadReportData === 'function') {
+      loadReportData();
+    }
+  } catch (e) {
+    console.error('onCloudExpensesUpdated error:', e);
+  }
+};
+
+window.onCloudTransactionsUpdated = async function() {
+  try {
+    console.log('[Realtime] Transactions updated from cloud, updating UI...');
+    if (State.activeView === 'reports' && typeof loadReportData === 'function') {
+      loadReportData();
+    }
+  } catch (e) {
+    console.error('onCloudTransactionsUpdated error:', e);
+  }
+};
+
+window.onCloudMutationsUpdated = async function() {
+  try {
+    console.log('[Realtime] Stock mutations updated from cloud, updating UI...');
+    updateSempolQuickBarUI();
+    if (State.activeView === 'reports' && typeof loadSempolStockReportData === 'function') {
+      loadSempolStockReportData();
+    }
+  } catch (e) {
+    console.error('onCloudMutationsUpdated error:', e);
+  }
+};
+
+// ====================================================
 // MOBILE MENU DRAWER (MODAL BOTTOM SHEET)
 // ====================================================
 
