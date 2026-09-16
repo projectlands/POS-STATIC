@@ -266,31 +266,31 @@
         <!-- Clock / Time -->
         <span id="digital-clock" class="hidden sm:inline-block text-xs md:text-sm font-mono text-slate-400 bg-slate-800/40 px-2 py-0.5 md:px-3 md:py-1 rounded-md border border-slate-800">20:45:00</span>
         
-        <!-- Admin-Only Header Tools -->
-        <div id="header-admin-tools" class="flex items-center gap-1 md:gap-2">
+        <!-- Admin-Only Header Tools (Desktop Only - on mobile available in Menu Drawer) -->
+        <div id="header-admin-tools" class="hidden md:flex items-center gap-2">
           <!-- Reset Button -->
-          <button onclick="resetDatabaseHandler()" id="btn-header-reset" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+          <button onclick="resetDatabaseHandler()" id="btn-header-reset" title="Reset ke Data Sampel Elektronik" class="bg-slate-800/60 hover:bg-danger-600/20 hover:text-danger-400 border border-slate-700/50 hover:border-danger-500/30 text-slate-400 px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1">
             <i class="fa-solid fa-arrows-rotate"></i>
-            <span class="hidden md:inline">Reset Sampel</span>
+            <span>Reset Sampel</span>
           </button>
           <!-- Settings Button -->
-          <button onclick="openStoreSettingsModal()" id="btn-header-settings" title="Pengaturan Toko" class="bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1">
+          <button onclick="openStoreSettingsModal()" id="btn-header-settings" title="Pengaturan Toko" class="bg-slate-800/60 hover:bg-primary-600/20 hover:text-primary-400 border border-slate-700/50 hover:border-primary-500/30 text-slate-400 px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1">
             <i class="fa-solid fa-gears"></i>
-            <span class="hidden md:inline">Pengaturan</span>
+            <span>Pengaturan</span>
           </button>
           <!-- Cloud DB Button -->
-          <button onclick="openCloudSettingsModal()" id="btn-header-cloud" title="Koneksi Database Eksternal" class="bg-slate-800/60 hover:bg-sky-600/20 hover:text-sky-400 border border-slate-700/50 hover:border-sky-500/30 text-slate-400 p-1 md:px-2.5 md:py-1 rounded-md transition-all text-[10px] md:text-xs flex items-center gap-1.5">
+          <button onclick="openCloudSettingsModal()" id="btn-header-cloud" title="Koneksi Database Eksternal" class="bg-slate-800/60 hover:bg-sky-600/20 hover:text-sky-400 border border-slate-700/50 hover:border-sky-500/30 text-slate-400 px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1.5">
             <i class="fa-solid fa-cloud text-sky-400"></i>
-            <span class="hidden sm:inline font-medium">Database</span>
+            <span class="font-medium">Database</span>
             <span id="cloud-header-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
           </button>
         </div>
       </div>
 
-      <!-- Quick Scan Info & Scanner gun indicator & Profile -->
+      <!-- Quick Scan Info & Scanner gun indicator & Mobile Menu Trigger -->
       <div class="flex items-center gap-2 md:gap-3 flex-shrink-0">
         <!-- Mobile Menu Trigger Button (Mobile Only) -->
-        <button id="btn-header-m-menu" onclick="openMobileMenuModal()" class="md:hidden flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/70 transition-colors" title="Buka Menu Lengkap">
+        <button id="btn-header-m-menu" onclick="openMobileMenuModal()" class="md:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/70 transition-colors shadow-sm" title="Buka Menu Lengkap">
           <i class="fa-solid fa-bars text-sm"></i>
         </button>
 

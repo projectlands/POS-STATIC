@@ -976,7 +976,10 @@ async function submitTransaction() {
       price: item.product.price,
       cost: item.product.cost || 0,
       quantity: item.quantity,
-      subtotal: item.product.price * item.quantity
+      subtotal: item.product.price * item.quantity,
+      code: item.product.code || '',
+      isSempol: !!item.product.isSempol,
+      piecesPerUnit: item.product.piecesPerUnit || 1
     })),
     subtotal: checkoutTotals.subtotal,
     discount: checkoutTotals.discount,
@@ -1862,7 +1865,9 @@ async function cancelTransactionHandler(txId) {
     `• Total: Rp ${(tx.total || 0).toLocaleString('id-ID')}\n` +
     `• Tanggal: ${dateStr}\n` +
     `• Metode: ${tx.paymentMethod || 'Tunai'}\n\n` +
-    `⚠️ PENTING: Seluruh stok barang / tusukan sempol yang terjual pada transaksi ini akan OTOMATIS DIKEMBALIKAN ke kasir.\n\n` +
+    `⚠️ PENTING:\n` +
+    `1. Stok barang & sisa tusukan sempol yang terjual akan OTOMATIS DIKEMBALIKAN (stok bertambah kembali).\n` +
+    `2. Riwayat minus tusuk penjualan di Kartu Stok Sempol akan OTOMATIS DIHAPUS.\n\n` +
     `Apakah Anda yakin ingin membatalkan transaksi ini?`;
 
   if (!confirm(confirmMsg)) return;
@@ -1874,16 +1879,25 @@ async function cancelTransactionHandler(txId) {
 
     if (Array.isArray(tx.items)) {
       for (const item of tx.items) {
-        if (item.isSempol) {
-          const sempolTusuk = (Number(item.piecesPerUnit) || 1) * (Number(item.quantity) || 1);
+        // Cari produk di database untuk memastikan apakah produk ini sempol
+        const prod = allProducts.find(p => 
+          (item.productId && p.id === item.productId) || 
+          (item.id && p.id === item.id) || 
+          (item.code && p.code === item.code) || 
+          (p.name === item.name)
+        );
+
+        const isSempolItem = item.isSempol || (prod && prod.isSempol) || (item.name && item.name.toLowerCase().includes('sempol'));
+        const pieces = Number(item.piecesPerUnit) || (prod ? Number(prod.piecesPerUnit) : 1) || 1;
+        const qty = Number(item.quantity) || 1;
+
+        if (isSempolItem) {
+          const sempolTusuk = pieces * qty;
           totalSempolRestored += sempolTusuk;
-        } else {
+        } else if (prod) {
           // Produk retail / minuman biasa: kembalikan stok
-          const prod = allProducts.find(p => String(p.id) === String(item.id) || p.code === item.code || p.name === item.name);
-          if (prod) {
-            prod.stock = (Number(prod.stock) || 0) + (Number(item.quantity) || 1);
-            await DB.saveProduct(prod);
-          }
+          prod.stock = (Number(prod.stock) || 0) + qty;
+          await DB.saveProduct(prod);
         }
       }
     }
@@ -1896,13 +1910,31 @@ async function cancelTransactionHandler(txId) {
       console.log(`[CancelTx] Mengembalikan ${totalSempolRestored} tusuk sempol. Stok baru: ${newStock}`);
     }
 
-    // 4. Hapus transaksi dari database lokal & Firebase
+    // 4. HAPUS RIWAYAT MUTASI PENJUALAN DARI KARTU STOK SEMPOL (sale_out linked to this transaction)
+    if (typeof DB.getStockMutations === 'function') {
+      const allMutations = await DB.getStockMutations(true);
+      for (const m of allMutations) {
+        const matchByTxId = m.transactionId && String(m.transactionId) === String(tx.id);
+        const matchByMutId = String(m.id) === 'tx_' + String(tx.id);
+        const matchByNote = (m.description && m.description.includes(String(tx.id))) || (m.notes && m.notes.includes(String(tx.id)));
+        if (matchByTxId || matchByMutId || matchByNote) {
+          console.log(`[CancelTx] Menghapus riwayat mutasi keluar #${m.id} dari transaksi #${tx.id}`);
+          if (typeof DB.permanentlyDeleteStockMutation === 'function') {
+            await DB.permanentlyDeleteStockMutation(m.id);
+          } else if (typeof DB.deleteStockMutation === 'function') {
+            await DB.deleteStockMutation(m.id);
+          }
+        }
+      }
+    }
+
+    // 5. Hapus transaksi dari database lokal & Firebase
     await DB.deleteTransaction(tx.id);
 
-    // 5. Tutup modal struk jika sedang terbuka
+    // 6. Tutup modal struk jika sedang terbuka
     closeReceiptModal();
 
-    // 6. Muat ulang laporan dan data kasir
+    // 7. Muat ulang laporan dan data kasir
     await loadInitialData();
     renderProducts();
     updateSempolQuickBarUI();
@@ -2888,6 +2920,26 @@ function updateCloudStatusUI(status, message) {
   if (alertIcon) alertIcon.className = `${alertIconClass} mt-0.5 text-base`;
   if (alertTitle) alertTitle.innerText = alertTitleText;
   if (alertDesc) alertDesc.innerText = message || 'Aplikasi siap digunakan.';
+
+  // Sembunyikan tombol Reset Sampel saat database eksternal / cloud aktif
+  const isCloudActive = (status === 'connected') || (typeof CloudDB !== 'undefined' && CloudDB.isEnabled && CloudDB.status === 'connected');
+  const resetBtnHeader = document.getElementById('btn-header-reset');
+  const resetBtnMMenu = document.getElementById('m-menu-reset-item');
+
+  if (resetBtnHeader) {
+    if (isCloudActive) {
+      resetBtnHeader.classList.add('hidden');
+    } else {
+      resetBtnHeader.classList.remove('hidden');
+    }
+  }
+  if (resetBtnMMenu) {
+    if (isCloudActive) {
+      resetBtnMMenu.classList.add('hidden');
+    } else {
+      resetBtnMMenu.classList.remove('hidden');
+    }
+  }
 }
 
 function openCloudSettingsModal() {
@@ -4810,8 +4862,35 @@ async function loadSempolStockReportData() {
   if (periodBadge) periodBadge.innerText = badgeLabel;
 
   // Fetch mutations and transactions
-  const allMutations = (typeof DB.getStockMutations === 'function') ? await DB.getStockMutations() : [];
+  const allMutationsRaw = (typeof DB.getStockMutations === 'function') ? await DB.getStockMutations() : [];
   const allTransactions = await DB.getTransactions();
+  const validTxIdSet = new Set(allTransactions.map(tx => String(tx.id)));
+
+  // Bersihkan dan abaikan mutasi keluar (sale_out) yang transaksi aslinya telah dibatalkan / dihapus
+  const allMutations = [];
+  for (const m of allMutationsRaw) {
+    if (m.type === 'sale_out') {
+      let txId = m.transactionId ? String(m.transactionId) : null;
+      if (!txId && typeof m.id === 'string' && m.id.startsWith('tx_')) {
+        txId = m.id.replace('tx_', '');
+      }
+      if (!txId && m.description) {
+        const match = m.description.match(/#(\d+)/);
+        if (match) txId = match[1];
+      }
+      if (txId && !validTxIdSet.has(txId)) {
+        // Transaksi telah dibatalkan/dihapus! Hapus permanen mutasi yatim ini agar tidak lagi muncul sebagai minus tusuk
+        console.log(`[SempolReport] Membersihkan mutasi yatim #${m.id} dari transaksi batal #${txId}`);
+        if (typeof DB.permanentlyDeleteStockMutation === 'function') {
+          await DB.permanentlyDeleteStockMutation(m.id);
+        } else if (typeof DB.deleteStockMutation === 'function') {
+          await DB.deleteStockMutation(m.id);
+        }
+        continue;
+      }
+    }
+    allMutations.push(m);
+  }
 
   // Combine sale events from transactions if not yet recorded in mutations
   const recordedTxIds = new Set(allMutations.filter(m => m.transactionId).map(m => String(m.transactionId)));
