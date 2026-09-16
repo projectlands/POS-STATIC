@@ -2510,18 +2510,24 @@ function applyRolePermissions() {
   const mDrawerCloud = document.getElementById('m-menu-cloud-item');
   const mDrawerSettings = document.getElementById('m-menu-settings-item');
   const mDrawerReset = document.getElementById('m-menu-reset-item');
+  const mDrawerAI = document.getElementById('m-menu-ai-item');
+  const aiFab = document.getElementById('ai-chat-fab-container');
 
   if (isCashier) {
     if (mDrawerStore) mDrawerStore.classList.add('hidden');
     if (mDrawerCloud) mDrawerCloud.classList.add('hidden');
     if (mDrawerSettings) mDrawerSettings.classList.add('hidden');
     if (mDrawerReset) mDrawerReset.classList.add('hidden');
+    if (mDrawerAI) mDrawerAI.classList.add('hidden');
+    if (aiFab) aiFab.classList.add('hidden');
   } else {
     if (mDrawerRole) mDrawerRole.classList.remove('hidden');
     if (mDrawerStore) mDrawerStore.classList.remove('hidden');
     if (mDrawerCloud) mDrawerCloud.classList.remove('hidden');
     if (mDrawerSettings) mDrawerSettings.classList.remove('hidden');
     if (mDrawerReset) mDrawerReset.classList.remove('hidden');
+    if (mDrawerAI) mDrawerAI.classList.remove('hidden');
+    if (aiFab) aiFab.classList.remove('hidden');
   }
 
   applyReportsRoleUI();
