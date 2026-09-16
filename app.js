@@ -275,7 +275,7 @@ function switchView(viewName) {
     }
   });
 
-  // Remove active styling from mobile nav buttons
+  // Update mobile nav buttons styling (preserve hidden)
   const mNavButtons = {
     cashier: document.getElementById('btn-m-nav-cashier'),
     cart: document.getElementById('btn-m-nav-cart'),
@@ -285,8 +285,10 @@ function switchView(viewName) {
   };
 
   Object.keys(mNavButtons).forEach((key) => {
-    if (mNavButtons[key]) {
-      mNavButtons[key].className = "flex flex-col items-center justify-center flex-1 py-1 text-slate-400 relative";
+    const btn = mNavButtons[key];
+    if (btn) {
+      btn.classList.remove('text-primary-500', 'font-bold');
+      btn.classList.add('text-slate-400');
     }
   });
 
@@ -299,7 +301,10 @@ function switchView(viewName) {
     cartSec.classList.remove('flex', 'w-full');
     
     if (navButtons.cashier) navButtons.cashier.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.cashier) mNavButtons.cashier.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
+    if (mNavButtons.cashier) {
+      mNavButtons.cashier.classList.remove('text-slate-400');
+      mNavButtons.cashier.classList.add('text-primary-500', 'font-bold');
+    }
     document.getElementById('view-title').innerText = "Mesin Kasir";
     renderProducts();
   } else if (viewName === 'cart') {
@@ -309,18 +314,28 @@ function switchView(viewName) {
     cartSec.classList.remove('hidden');
     cartSec.classList.add('flex', 'w-full');
     
-    if (mNavButtons.cart) mNavButtons.cart.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
+    if (mNavButtons.cart) {
+      mNavButtons.cart.classList.remove('text-slate-400');
+      mNavButtons.cart.classList.add('text-primary-500', 'font-bold');
+    }
     document.getElementById('view-title').innerText = "Keranjang";
     renderCart();
   } else if (viewName === 'products') {
     document.getElementById('view-products').classList.remove('hidden');
     if (navButtons.products) navButtons.products.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.products) mNavButtons.products.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
+    if (mNavButtons.products) {
+      mNavButtons.products.classList.remove('text-slate-400');
+      mNavButtons.products.classList.add('text-primary-500', 'font-bold');
+    }
     document.getElementById('view-title').innerText = "Kelola Produk";
     renderInventoryTable();
   } else if (viewName === 'reports') {
     document.getElementById('view-reports').classList.remove('hidden');
     if (navButtons.reports) navButtons.reports.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
+    if (mNavButtons.reports) {
+      mNavButtons.reports.classList.remove('text-slate-400');
+      mNavButtons.reports.classList.add('text-primary-500', 'font-bold');
+    }
     const isCashier = State.currentUser?.role === 'cashier';
     document.getElementById('view-title').innerText = isCashier ? "Riwayat Transaksi" : "Laporan Penjualan";
     
@@ -333,6 +348,9 @@ function switchView(viewName) {
     applyReportsRoleUI();
     loadReportData();
   }
+
+  // Selalu terapkan kembali izin role agar menu yang dibatasi (seperti Menu Drawer & Produk di Kasir) tidak pernah bocor
+  applyRolePermissions();
 }
 
 // ----------------------------------------------------
