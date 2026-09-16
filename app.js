@@ -2326,7 +2326,7 @@ function applyRolePermissions() {
 
     // Header: Matikan switch toko & admin buttons
     if (headerStoreSwitch) headerStoreSwitch.classList.add('hidden');
-    if (headerAdminTools) headerAdminTools.classList.add('hidden');
+    if (headerAdminTools) headerAdminTools.classList.add('!hidden');
     if (headerMobileMenuBtn) headerMobileMenuBtn.classList.add('hidden');
 
     // Mobile Bottom Nav: Kasir HANYA melihat Kasir, Keranjang, dan tombol Keluar
@@ -2341,7 +2341,10 @@ function applyRolePermissions() {
     if (sidebarStoreSwitchIcon) sidebarStoreSwitchIcon.classList.remove('hidden');
 
     if (headerStoreSwitch) headerStoreSwitch.classList.remove('hidden');
-    if (headerAdminTools) headerAdminTools.classList.remove('hidden');
+    if (headerAdminTools) {
+      headerAdminTools.classList.remove('!hidden');
+      headerAdminTools.classList.add('hidden', 'md:flex');
+    }
     if (headerMobileMenuBtn) headerMobileMenuBtn.classList.remove('hidden');
 
     if (mNavProducts) mNavProducts.classList.remove('hidden');
