@@ -12,13 +12,20 @@ const AIAgent = {
   // State
   messages: [],
   apiKey: '',
-  selectedModel: 'gemini-1.5-flash',
+  selectedModel: 'auto',
+  cachedModels: [],
   isThinking: false,
 
   // Inisialisasi
   async init() {
     this.apiKey = localStorage.getItem('ai_gemini_api_key') || '';
-    this.selectedModel = localStorage.getItem('ai_selected_model') || 'gemini-1.5-flash';
+    this.selectedModel = localStorage.getItem('ai_selected_model') || 'auto';
+    
+    try {
+      this.cachedModels = JSON.parse(localStorage.getItem('ai_cached_models') || '[]');
+    } catch (e) {
+      this.cachedModels = [];
+    }
     
     // Muat riwayat chat terakhir dari local storage jika ada
     try {
@@ -272,7 +279,16 @@ const AIAgent = {
 
   // Query Google Gemini REST API
   async queryGemini(prompt, snapshot) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.selectedModel}:generateContent?key=${this.apiKey}`;
+    let activeModel = this.selectedModel || 'auto';
+    if (activeModel === 'auto') {
+      // Prioritaskan model flash yang cepat dan hemat kuota
+      const flashModel = (this.cachedModels || []).find(m => (m.name || '').includes('flash'));
+      activeModel = flashModel ? flashModel.name.replace(/^models\//, '') : 'gemini-1.5-flash';
+    } else {
+      activeModel = activeModel.replace(/^models\//, '');
+    }
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${this.apiKey}`;
 
     const systemInstruction = `
 Kamu adalah "AI Asisten Bisnis & Financial Advisor CFO" profesional untuk usaha UMKM di Indonesia bernama "${snapshot.storeName}".
@@ -658,14 +674,98 @@ function updateAIEngineBadge() {
   }
 }
 
+// Ambil daftar model yang tersedia dari Google Gemini API
+AIAgent.fetchAvailableModels = async function(apiKey) {
+  const key = (apiKey || this.apiKey || '').trim();
+  if (!key || key.length < 10) return [];
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const rawModels = data.models || [];
+    
+    // Filter hanya model yang mendukung generateContent dan berupa gemini
+    const contentModels = rawModels.filter(m => {
+      const name = (m.name || '').toLowerCase();
+      const methods = m.supportedGenerationMethods || [];
+      return methods.includes('generateContent') && name.includes('gemini') && !name.includes('vision');
+    });
+
+    // Urutkan: Flash terlebih dahulu, lalu pro
+    contentModels.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      if (aName.includes('flash') && !bName.includes('flash')) return -1;
+      if (!aName.includes('flash') && bName.includes('flash')) return 1;
+      return aName.localeCompare(bName);
+    });
+
+    this.cachedModels = contentModels;
+    localStorage.setItem('ai_cached_models', JSON.stringify(contentModels));
+    return contentModels;
+  } catch (err) {
+    console.warn('Gagal memuat model dari Gemini:', err);
+    throw err;
+  }
+};
+
+// Render opsi model ke elemen select
+AIAgent.populateModelSelect = function(models, selectedVal = 'auto') {
+  const select = document.getElementById('ai-model-select');
+  if (!select) return;
+
+  const currentVal = selectedVal || this.selectedModel || 'auto';
+  let html = `<option value="auto">✨ Otomatis (Model Cepat &amp; Terbaik - Direkomendasikan)</option>`;
+
+  if (Array.isArray(models) && models.length > 0) {
+    models.forEach(m => {
+      const cleanName = (m.name || '').replace(/^models\//, '');
+      const displayName = m.displayName ? `${m.displayName} (${cleanName})` : cleanName;
+      const isSelected = (currentVal === cleanName || currentVal === m.name);
+      html += `<option value="${cleanName}" ${isSelected ? 'selected' : ''}>${displayName}</option>`;
+    });
+  } else {
+    // Fallback default
+    html += `
+      <option value="gemini-1.5-flash" ${currentVal === 'gemini-1.5-flash' ? 'selected' : ''}>Gemini 1.5 Flash (Cepat &amp; Efisien)</option>
+      <option value="gemini-2.0-flash" ${currentVal === 'gemini-2.0-flash' ? 'selected' : ''}>Gemini 2.0 Flash (Generasi Baru)</option>
+      <option value="gemini-1.5-pro" ${currentVal === 'gemini-1.5-pro' ? 'selected' : ''}>Gemini 1.5 Pro (Analisis Kompleks)</option>
+    `;
+  }
+
+  select.innerHTML = html;
+  if (currentVal === 'auto') select.value = 'auto';
+
+  const countBadge = document.getElementById('ai-model-count');
+  if (countBadge) {
+    countBadge.innerText = (models && models.length > 0) ? `${models.length} Model Ditemukan` : 'Auto-Detect Aktif';
+  }
+};
+
 // Modal Pengaturan API Key AI
 function openAISettingsModal() {
   const modal = document.getElementById('modal-ai-settings');
   if (!modal) return;
   const inputKey = document.getElementById('ai-api-key-input');
-  const modelSelect = document.getElementById('ai-model-select');
   if (inputKey) inputKey.value = AIAgent.apiKey || '';
-  if (modelSelect) modelSelect.value = AIAgent.selectedModel || 'gemini-1.5-flash';
+  
+  // Tampilkan model yang tersimpan di cache
+  AIAgent.populateModelSelect(AIAgent.cachedModels, AIAgent.selectedModel);
+
+  const statusEl = document.getElementById('ai-api-status');
+  if (statusEl) {
+    if (AIAgent.apiKey && AIAgent.apiKey.length > 10) {
+      statusEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> <span class="text-emerald-300">API Key terpasang (${AIAgent.cachedModels.length || 0} model terdeteksi).</span>`;
+      statusEl.classList.remove('hidden');
+    } else {
+      statusEl.classList.add('hidden');
+    }
+  }
+
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
@@ -678,18 +778,101 @@ function closeAISettingsModal() {
   }
 }
 
-function saveAISettings() {
+// Debounce deteksi otomatis saat pengguna mengetik/paste API key
+let apiKeyDebounceTimer = null;
+function onApiKeyInputChange(val) {
+  clearTimeout(apiKeyDebounceTimer);
+  const trimmed = (val || '').trim();
+  const statusEl = document.getElementById('ai-api-status');
+  if (trimmed.length < 15) {
+    if (statusEl) statusEl.classList.add('hidden');
+    return;
+  }
+
+  apiKeyDebounceTimer = setTimeout(() => {
+    loadGeminiModelsFromInput(false);
+  }, 700);
+}
+
+// Cek API Key dan ambil daftar model aktif dari Google
+async function loadGeminiModelsFromInput(showToastNotice = false) {
+  const inputKey = document.getElementById('ai-api-key-input');
+  const key = inputKey ? inputKey.value.trim() : '';
+  const statusEl = document.getElementById('ai-api-status');
+  const icon = document.getElementById('icon-fetch-models');
+
+  if (!key || key.length < 10) {
+    if (statusEl) {
+      statusEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-amber-400"></i> <span class="text-amber-300">Masukkan API Key terlebih dahulu.</span>`;
+      statusEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-indigo-400';
+  if (statusEl) {
+    statusEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-indigo-400"></i> <span class="text-slate-400">Menghubungi Google Gemini &amp; mendeteksi model...</span>`;
+    statusEl.classList.remove('hidden');
+  }
+
+  try {
+    const models = await AIAgent.fetchAvailableModels(key);
+    if (models.length > 0) {
+      AIAgent.populateModelSelect(models, AIAgent.selectedModel);
+      if (statusEl) {
+        statusEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> <span class="text-emerald-300 font-semibold">API Key Valid! Ditemukan ${models.length} model Gemini aktif.</span>`;
+        statusEl.classList.remove('hidden');
+      }
+      if (showToastNotice && typeof showToast === 'function') {
+        showToast(`Berhasil menemukan ${models.length} model Gemini aktif!`, 'success');
+      }
+    } else {
+      if (statusEl) {
+        statusEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-400"></i> <span class="text-amber-300">Kunci valid, menggunakan model bawaan standar.</span>`;
+        statusEl.classList.remove('hidden');
+      }
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-400"></i> <span class="text-rose-300">Gagal: ${err.message}</span>`;
+      statusEl.classList.remove('hidden');
+    }
+    if (showToastNotice && typeof showToast === 'function') {
+      showToast(`Gagal verifikasi API Key: ${err.message}`, 'error');
+    }
+  } finally {
+    if (icon) icon.className = 'fa-solid fa-arrows-rotate';
+  }
+}
+
+// Simpan Pengaturan
+async function saveAISettings() {
   const inputKey = document.getElementById('ai-api-key-input');
   const modelSelect = document.getElementById('ai-model-select');
-  const key = inputKey ? inputKey.value : '';
-  const model = modelSelect ? modelSelect.value : 'gemini-1.5-flash';
+  const btnSave = document.getElementById('btn-save-ai-settings');
+  const key = inputKey ? inputKey.value.trim() : '';
+  const model = modelSelect ? modelSelect.value : 'auto';
+
+  // Jika ada API key baru dan belum pernah di-fetch modelnya, fetch dulu
+  if (key && key.length > 10 && AIAgent.cachedModels.length === 0) {
+    if (btnSave) btnSave.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>Menyimpan &amp; Memeriksa...</span>`;
+    try {
+      const models = await AIAgent.fetchAvailableModels(key);
+      AIAgent.populateModelSelect(models, model);
+    } catch (e) {
+      console.warn('Simpan tetap dilanjutkan meskipun fetch gagal:', e);
+    } finally {
+      if (btnSave) btnSave.innerHTML = `<i class="fa-solid fa-floppy-disk"></i><span>Simpan Pengaturan</span>`;
+    }
+  }
   
   AIAgent.setApiKey(key, model);
   updateAIEngineBadge();
   closeAISettingsModal();
 
   if (typeof showToast === 'function') {
-    showToast(key ? 'Pengaturan AI Gemini berhasil disimpan!' : 'AI beralih ke Smart Engine internal.', 'success');
+    const modelText = model === 'auto' ? 'Otomatis (Flash)' : model;
+    showToast(key ? `Pengaturan Gemini AI tersimpan! Model: ${modelText}` : 'AI beralih ke Smart Engine internal.', 'success');
   }
 }
 
