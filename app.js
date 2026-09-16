@@ -1721,6 +1721,23 @@ async function loadReportData() {
     });
   });
 
+  // Hitung total tusuk sempol yang terjual pada rentang waktu ini
+  let totalSempolTusukSold = 0;
+  const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
+  filteredTx.forEach(tx => {
+    if (Array.isArray(tx.items)) {
+      tx.items.forEach(item => {
+        const prod = State.products.find(p => (item.productId && p.id === item.productId) || (item.id && p.id === item.id) || (item.code && p.code === item.code) || (p.name === item.name));
+        const isSempol = item.isSempol || (prod && prod.isSempol) || (item.name && item.name.toLowerCase().includes('sempol'));
+        if (isSempol) {
+          const pieces = Number(item.piecesPerUnit) || (prod ? Number(prod.piecesPerUnit) : 1) || 1;
+          const qty = Number(item.quantity) || 1;
+          totalSempolTusukSold += (pieces * qty);
+        }
+      });
+    }
+  });
+
   const profit = netSales - cost;
   const avgBill = txCount > 0 ? Math.round(revenue / txCount) : 0;
 
@@ -1729,6 +1746,17 @@ async function loadReportData() {
   document.getElementById('report-stat-profit').innerText = `Rp ${profit.toLocaleString('id-ID')}`;
   document.getElementById('report-stat-count').innerText = txCount;
   document.getElementById('report-stat-avg').innerText = `Rp ${avgBill.toLocaleString('id-ID')}`;
+
+  const sempolStatContainer = document.getElementById('report-stat-sempol-container');
+  const sempolStatVal = document.getElementById('report-stat-sempol-val');
+  if (sempolStatContainer && sempolStatVal) {
+    if (isSempolMode || totalSempolTusukSold > 0) {
+      sempolStatVal.innerText = totalSempolTusukSold.toLocaleString('id-ID');
+      sempolStatContainer.classList.remove('hidden');
+    } else {
+      sempolStatContainer.classList.add('hidden');
+    }
+  }
 
   // Render transactions history table
   renderTransactionsHistoryTable(filteredTx);
@@ -3892,6 +3920,29 @@ async function updateSempolQuickBarUI() {
 
   const badge = document.getElementById('sempol-stock-count-badge');
   if (badge) badge.innerText = `${stockCount} Tusuk`;
+
+  // Hitung total tusuk yang pernah terjual dari seluruh transaksi aktif
+  try {
+    const transactions = await DB.getTransactions();
+    let totalSoldSticks = 0;
+    transactions.forEach(tx => {
+      if (Array.isArray(tx.items)) {
+        tx.items.forEach(item => {
+          const prod = State.products.find(p => (item.productId && p.id === item.productId) || (item.id && p.id === item.id) || (item.code && p.code === item.code) || (p.name === item.name));
+          const isSempol = item.isSempol || (prod && prod.isSempol) || (item.name && item.name.toLowerCase().includes('sempol'));
+          if (isSempol) {
+            const pieces = Number(item.piecesPerUnit) || (prod ? Number(prod.piecesPerUnit) : 1) || 1;
+            const qty = Number(item.quantity) || 1;
+            totalSoldSticks += (pieces * qty);
+          }
+        });
+      }
+    });
+    const soldBadge = document.getElementById('sempol-sold-count-badge');
+    const soldEl = document.getElementById('sempol-sold-count-val');
+    if (soldEl) soldEl.innerText = totalSoldSticks.toLocaleString('id-ID');
+    if (soldBadge) soldBadge.classList.remove('hidden');
+  } catch (_) {}
 
   const costEl = document.getElementById('sempol-unit-cost-val');
   if (costEl) costEl.innerText = unitCost.toLocaleString('id-ID');
