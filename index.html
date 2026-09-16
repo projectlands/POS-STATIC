@@ -190,15 +190,17 @@
           <span>Mesin Kasir</span>
         </button>
 
+        <!-- Riwayat Transaksi / Laporan (Bisa Diakses Kasir & Admin) -->
+        <button id="btn-nav-reports" onclick="switchView('reports')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
+          <i id="icon-nav-reports" class="fa-solid fa-chart-line text-lg"></i>
+          <span id="label-nav-reports">Laporan Penjualan</span>
+        </button>
+
         <!-- Admin Only Menu Items -->
         <div id="sidebar-admin-menu" class="space-y-2">
           <button id="btn-nav-products" onclick="switchView('products')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
             <i class="fa-solid fa-box text-lg"></i>
             <span>Kelola Produk</span>
-          </button>
-          <button id="btn-nav-reports" onclick="switchView('reports')" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
-            <i class="fa-solid fa-chart-line text-lg"></i>
-            <span>Laporan Penjualan</span>
           </button>
           <button id="btn-nav-settings" onclick="openStoreSettingsModal()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 text-slate-400 hover:bg-slate-800/50 hover:text-white">
             <i class="fa-solid fa-gears text-lg"></i>
@@ -1403,10 +1405,10 @@
             <span>Cetak Printer</span>
           </button>
         </div>
-        <!-- Row 3: Void / Cancel Transaction (Admin Only) -->
+        <!-- Row 3: Void / Cancel Transaction -->
         <button type="button" id="btn-receipt-cancel" onclick="cancelTransactionHandler(State.currentReceiptTx?.id)" class="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold rounded-xl text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
           <i class="fa-solid fa-ban text-xs"></i>
-          <span>Batalkan / Hapus Transaksi Ini (Admin)</span>
+          <span>Batalkan / Hapus Transaksi Ini</span>
         </button>
       </div>
     </div>
@@ -1429,8 +1431,8 @@
       <span class="text-[9px] mt-1 font-semibold">Produk</span>
     </button>
     <button onclick="switchView('reports')" id="btn-m-nav-reports" class="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 relative">
-      <i class="fa-solid fa-chart-line text-base"></i>
-      <span class="text-[9px] mt-1 font-semibold">Laporan</span>
+      <i id="icon-m-nav-reports" class="fa-solid fa-chart-line text-base"></i>
+      <span id="label-m-nav-reports" class="text-[9px] mt-1 font-semibold">Laporan</span>
     </button>
     <button onclick="openMobileMenuModal()" id="btn-m-nav-menu" class="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 hover:text-white transition-colors relative">
       <div class="relative">

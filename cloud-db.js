@@ -275,7 +275,14 @@ const CloudDB = {
     if (!this.isEnabled) return;
     const config = this.getConfig();
     try {
-      if (this.provider === 'mysql' && config?.mysqlApiUrl) {
+      if (this.provider === 'sheets' && config?.sheetsUrl) {
+        await fetch(config.sheetsUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete_transaction', id: id, storeId: this.getActiveStoreId() })
+        }).catch(() => {});
+      } else if (this.provider === 'mysql' && config?.mysqlApiUrl) {
         await fetch(config.mysqlApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -324,13 +331,27 @@ const CloudDB = {
 
   async deleteProduct(id) {
     if (!this.isEnabled) return;
+    const config = this.getConfig();
     try {
-      if (this.firestore) {
+      if (this.provider === 'sheets' && config?.sheetsUrl) {
+        await fetch(config.sheetsUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete_product', id: id, storeId: this.getActiveStoreId() })
+        }).catch(() => {});
+      } else if (this.provider === 'mysql' && config?.mysqlApiUrl) {
+        await fetch(config.mysqlApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete_product', id: id, key: config.mysqlApiKey, storeId: this.getActiveStoreId() })
+        }).catch(() => {});
+      } else if (this.firestore) {
         await this.getCollection('products').doc(String(id)).delete();
         console.log('Product deleted from Firestore:', id);
       }
     } catch (err) {
-      console.error('Failed to delete product in Firestore:', err);
+      console.error('Failed to delete product in remote database:', err);
     }
   },
 

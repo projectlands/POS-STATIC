@@ -128,6 +128,38 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ success: true, message: 'Produk tercatat di Google Sheets' }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+
+  if (action === 'delete_product') {
+    var idToDelete = String(data.id || '');
+    var sheetProd = ss.getSheetByName('Products');
+    if (sheetProd && idToDelete) {
+      var values = sheetProd.getDataRange().getValues();
+      for (var i = 1; i < values.length; i++) {
+        if (String(values[i][0]) === idToDelete) {
+          sheetProd.deleteRow(i + 1);
+          break;
+        }
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ success: true, message: 'Produk dihapus dari Google Sheets' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'delete_transaction') {
+    var txIdToDelete = String(data.id || '');
+    var sTrx = ss.getSheetByName('Transactions');
+    if (sTrx && txIdToDelete) {
+      var txValues = sTrx.getDataRange().getValues();
+      for (var j = 1; j < txValues.length; j++) {
+        if (String(txValues[j][0]) === txIdToDelete) {
+          sTrx.deleteRow(j + 1);
+          break;
+        }
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ success: true, message: 'Transaksi dihapus dari Google Sheets' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   
   if (action === 'bulk_upload') {
     var payload = data.data || {};

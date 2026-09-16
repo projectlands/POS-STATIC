@@ -411,10 +411,24 @@ const DB = {
         await this.execute('categories', 'readwrite', (store) => store.put(cat));
       }
     }
-    if (products && products.length > 0) {
+    if (products && Array.isArray(products) && products.length > 0) {
+      const cloudProductIds = new Set();
       for (const prod of products) {
         if (prod.id && !isNaN(prod.id)) prod.id = Number(prod.id);
+        cloudProductIds.add(prod.id);
         await this.execute('products', 'readwrite', (store) => store.put(prod));
+      }
+      // Hapus produk lokal yang sudah dihapus di cloud
+      try {
+        const localProds = await this.getProducts();
+        for (const lp of localProds) {
+          if (!cloudProductIds.has(lp.id)) {
+            console.log('[DB] Removing product deleted from cloud:', lp.name, lp.id);
+            await this.execute('products', 'readwrite', (store) => store.delete(lp.id));
+          }
+        }
+      } catch (err) {
+        console.warn('[DB] Error pruning deleted cloud products:', err);
       }
     }
     if (transactions && transactions.length > 0) {
@@ -610,108 +624,8 @@ const DB = {
       }
     }
 
-    // 4. Pastikan menu utama Sempol selalu lengkap
-    const updatedProducts = await this.getProducts();
-    const existingCodes = updatedProducts.map(p => p.code);
-    const initialSempolProducts = [
-      {
-        name: 'Sempol Paket Puas (6 Tusuk)',
-        price: 10000,
-        cost: 2400,
-        unitCost: 400,
-        piecesPerUnit: 6,
-        stock: maxSempolStock,
-        category: 'Paket Sempol',
-        code: 'SMP-001',
-        color: 'amber',
-        icon: 'fa-utensils',
-        isSempol: true
-      },
-      {
-        name: 'Sempol Paket Hemat (3 Tusuk)',
-        price: 5000,
-        cost: 1200,
-        unitCost: 400,
-        piecesPerUnit: 3,
-        stock: maxSempolStock,
-        category: 'Paket Sempol',
-        code: 'SMP-002',
-        color: 'orange',
-        icon: 'fa-utensils',
-        isSempol: true
-      },
-      {
-        name: 'Sempol Paket Jumbo (10 Tusuk)',
-        price: 15000,
-        cost: 4000,
-        unitCost: 400,
-        piecesPerUnit: 10,
-        stock: maxSempolStock,
-        category: 'Paket Sempol',
-        code: 'SMP-003',
-        color: 'yellow',
-        icon: 'fa-fire',
-        isSempol: true
-      },
-      {
-        name: 'Sempol Eceran (1 Tusuk)',
-        price: 2000,
-        cost: 400,
-        unitCost: 400,
-        piecesPerUnit: 1,
-        stock: maxSempolStock,
-        category: 'Paket Sempol',
-        code: 'SMP-004',
-        color: 'rose',
-        icon: 'fa-utensils',
-        isSempol: true
-      },
-      {
-        name: 'Es Teh Manis Jumbo',
-        price: 5000,
-        cost: 1500,
-        unitCost: 1500,
-        piecesPerUnit: 1,
-        stock: 50,
-        category: 'Minuman Segar',
-        code: 'DRK-001',
-        color: 'emerald',
-        icon: 'fa-glass-water',
-        isSempol: false
-      },
-      {
-        name: 'Air Mineral Dingin',
-        price: 3000,
-        cost: 1500,
-        unitCost: 1500,
-        piecesPerUnit: 1,
-        stock: 40,
-        category: 'Minuman Segar',
-        code: 'DRK-002',
-        color: 'sky',
-        icon: 'fa-bottle-water',
-        isSempol: false
-      },
-      {
-        name: 'Ekstra Saus Sambal Pedas Manis',
-        price: 1000,
-        cost: 300,
-        unitCost: 300,
-        piecesPerUnit: 1,
-        stock: 80,
-        category: 'Ekstra & Saus',
-        code: 'TOP-001',
-        color: 'red',
-        icon: 'fa-pepper-hot',
-        isSempol: false
-      }
-    ];
-
-    for (const initProd of initialSempolProducts) {
-      if (!existingCodes.includes(initProd.code)) {
-        await this.saveProduct(initProd);
-      }
-    }
+    // 4. Pastikan menu utama Sempol hanya di-seed jika database produk masih kosong bersih
+    // (Produk yang sudah dihapus oleh pengguna tidak akan dipaksa muncul kembali)
 
     // 5. Samakan stok tusuk sempol di semua menu sempol
     const finalProducts = await this.getProducts();

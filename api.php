@@ -197,6 +197,30 @@ switch ($action) {
         echo json_encode(['success' => true, 'message' => 'Produk berhasil disimpan ke MySQL!']);
         break;
 
+    case 'delete_product':
+        $delId = $input['id'] ?? $_GET['id'] ?? null;
+        if ($delId) {
+            $stmt = $pdo->prepare("DELETE FROM `products` WHERE `id` = :id");
+            $stmt->execute([':id' => $delId]);
+            echo json_encode(['success' => true, 'message' => 'Produk berhasil dihapus dari MySQL!']);
+        } else {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'ID produk tidak valid']);
+        }
+        break;
+
+    case 'delete_transaction':
+        $delTxId = $input['id'] ?? $_GET['id'] ?? null;
+        if ($delTxId) {
+            $stmt = $pdo->prepare("DELETE FROM `transactions` WHERE `id` = :id");
+            $stmt->execute([':id' => $delTxId]);
+            echo json_encode(['success' => true, 'message' => 'Transaksi berhasil dihapus dari MySQL!']);
+        } else {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'ID transaksi tidak valid']);
+        }
+        break;
+
     case 'save_expense':
         $e = $input['data'] ?? null;
         if (!$e) {

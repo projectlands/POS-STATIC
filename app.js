@@ -243,9 +243,9 @@ function switchView(viewName) {
     viewName = 'cashier';
   }
 
-  // Auth Guard: Kasir hanya boleh mengakses kasir & keranjang
-  if ((viewName === 'products' || viewName === 'reports') && State.currentUser?.role === 'cashier') {
-    showToast('Akses dibatasi untuk Kasir. Masukkan PIN Admin untuk membuka menu ini.', 'info');
+  // Auth Guard: Kasir dibatasi hanya tidak boleh membuka Kelola Produk
+  if (viewName === 'products' && State.currentUser?.role === 'cashier') {
+    showToast('Akses Kelola Produk dibatasi khusus Admin.', 'info');
     openAuthModal('admin', () => switchView(viewName));
     return;
   }
@@ -321,15 +321,16 @@ function switchView(viewName) {
   } else if (viewName === 'reports') {
     document.getElementById('view-reports').classList.remove('hidden');
     if (navButtons.reports) navButtons.reports.className = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 bg-primary-600 text-white shadow-glow-primary";
-    if (mNavButtons.reports) mNavButtons.reports.className = "flex flex-col items-center justify-center flex-1 py-1 text-primary-500 font-bold relative";
-    document.getElementById('view-title').innerText = "Laporan Penjualan";
+    const isCashier = State.currentUser?.role === 'cashier';
+    document.getElementById('view-title').innerText = isCashier ? "Riwayat Transaksi" : "Laporan Penjualan";
     
     // Set default dates for report (using local date string)
     const todayStr = getLocalDateString(0);
     const sevenDaysAgoStr = getLocalDateString(-6);
-    document.getElementById('filter-date-start').value = sevenDaysAgoStr;
+    document.getElementById('filter-date-start').value = isCashier ? todayStr : sevenDaysAgoStr;
     document.getElementById('filter-date-end').value = todayStr;
     
+    applyReportsRoleUI();
     loadReportData();
   }
 }
@@ -1193,8 +1194,8 @@ ${footerLines}
     } else {
       cancelBtn.disabled = false;
       cancelBtn.className = "w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold rounded-xl text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.98]";
-      cancelBtn.innerHTML = '<i class="fa-solid fa-ban text-xs"></i> <span>Batalkan / Hapus Transaksi Ini (Admin)</span>';
-      cancelBtn.title = "Batalkan / Hapus Transaksi (Khusus Admin)";
+      cancelBtn.innerHTML = '<i class="fa-solid fa-ban text-xs"></i> <span>Batalkan / Hapus Transaksi Ini</span>';
+      cancelBtn.title = "Batalkan / Hapus Transaksi (Kembalikan Stok)";
     }
   }
   
@@ -1787,8 +1788,9 @@ async function loadReportData() {
 
   const sempolStatContainer = document.getElementById('report-stat-sempol-container');
   const sempolStatVal = document.getElementById('report-stat-sempol-val');
+  const isCashierRole = State.currentUser?.role === 'cashier';
   if (sempolStatContainer && sempolStatVal) {
-    if (isSempolMode || totalSempolTusukSold > 0) {
+    if (!isCashierRole && (isSempolMode || totalSempolTusukSold > 0)) {
       sempolStatVal.innerText = totalSempolTusukSold.toLocaleString('id-ID');
       sempolStatContainer.classList.remove('hidden');
     } else {
@@ -1850,7 +1852,7 @@ function renderTransactionsHistoryTable(txList) {
             <i class="fa-solid fa-ban text-[11px]"></i>
             <span>Batal</span>
           </button>`
-        : `<button onclick="cancelTransactionHandler('${tx.id}')" class="text-xs text-rose-400/80 hover:text-rose-400 font-semibold transition-colors flex items-center gap-1 p-1 hover:bg-rose-500/10 rounded" title="Batalkan / Hapus Transaksi (Khusus Admin)">
+        : `<button onclick="cancelTransactionHandler('${tx.id}')" class="text-xs text-rose-400/80 hover:text-rose-400 font-semibold transition-colors flex items-center gap-1 p-1 hover:bg-rose-500/10 rounded" title="Batalkan / Hapus Transaksi (Kembalikan Stok)">
             <i class="fa-solid fa-ban text-[11px]"></i>
             <span>Batal</span>
           </button>`;
@@ -1905,7 +1907,7 @@ function renderTransactionsHistoryTable(txList) {
               <i class="fa-solid fa-ban text-[9px]"></i>
               <span>Batal</span>
             </button>`
-          : `<button onclick="cancelTransactionHandler('${tx.id}')" class="text-[11px] text-rose-400 font-semibold hover:underline flex items-center gap-0.5" title="Batalkan Transaksi (Admin)">
+          : `<button onclick="cancelTransactionHandler('${tx.id}')" class="text-[11px] text-rose-400 font-semibold hover:underline flex items-center gap-0.5" title="Batalkan Transaksi (Kembalikan Stok)">
               <i class="fa-solid fa-ban text-[9px]"></i>
               <span>Batal</span>
             </button>`;
@@ -1957,9 +1959,7 @@ async function viewTransactionDetail(txId) {
 async function cancelTransactionHandler(txId) {
   if (!txId) return;
 
-  // 1. Verifikasi hak akses khusus Admin
-  if (!requireAdmin(() => cancelTransactionHandler(txId))) return;
-
+  // Kasir dan Admin sama-sama dapat membatalkan transaksi yang belum lewat 1 hari
   // 2. Ambil data transaksi
   const transactions = await DB.getTransactions();
   const tx = transactions.find(t => String(t.id) === String(txId));
@@ -2421,32 +2421,44 @@ function applyRolePermissions() {
   if (header) header.classList.remove('!hidden');
   if (mobileNav) mobileNav.classList.remove('!hidden');
 
-  // KONDISI 2: Role Kasir -> HANYA menu Kasir & Keranjang yang terlihat
+  // KONDISI 2: Role Kasir -> Melihat Kasir & Riwayat Transaksi (Menu sensitif disembunyikan)
   const sidebarAdminMenu = document.getElementById('sidebar-admin-menu');
   const sidebarCloudStatus = document.getElementById('sidebar-cloud-sync-status');
   const sidebarStoreSwitchIcon = document.getElementById('sidebar-store-switch-icon');
   const headerStoreSwitch = document.getElementById('btn-header-store-switch');
   const headerAdminTools = document.getElementById('header-admin-tools');
   const headerMobileMenuBtn = document.getElementById('btn-header-m-menu');
+  const btnNavReports = document.getElementById('btn-nav-reports');
+  const iconNavReports = document.getElementById('icon-nav-reports');
+  const labelNavReports = document.getElementById('label-nav-reports');
   const mNavProducts = document.getElementById('btn-m-nav-products');
   const mNavReports = document.getElementById('btn-m-nav-reports');
+  const iconMNavReports = document.getElementById('icon-m-nav-reports');
+  const labelMNavReports = document.getElementById('label-m-nav-reports');
   const mNavMenu = document.getElementById('btn-m-nav-menu');
   const mNavLogout = document.getElementById('btn-m-nav-logout');
 
   if (isCashier) {
-    // Sembunyikan seluruh menu admin di sidebar
+    // Sembunyikan seluruh menu admin di sidebar (Kelola Produk, Pengaturan Toko, Cloud)
     if (sidebarAdminMenu) sidebarAdminMenu.classList.add('hidden');
     if (sidebarCloudStatus) sidebarCloudStatus.classList.add('hidden');
     if (sidebarStoreSwitchIcon) sidebarStoreSwitchIcon.classList.add('hidden');
 
-    // Header: Matikan switch toko & admin buttons
+    // Sidebar: Tampilkan tombol Riwayat Transaksi untuk Kasir
+    if (btnNavReports) btnNavReports.classList.remove('hidden');
+    if (iconNavReports) iconNavReports.className = 'fa-solid fa-receipt text-lg';
+    if (labelNavReports) labelNavReports.innerText = 'Riwayat Transaksi';
+
+    // Header: Matikan switch toko, drawer menu, dan admin tools
     if (headerStoreSwitch) headerStoreSwitch.classList.add('hidden');
     if (headerAdminTools) headerAdminTools.classList.add('!hidden');
     if (headerMobileMenuBtn) headerMobileMenuBtn.classList.add('hidden');
 
-    // Mobile Bottom Nav: Kasir HANYA melihat Kasir, Keranjang, dan tombol Keluar
+    // Mobile Bottom Nav: Kasir melihat Kasir, Keranjang, Riwayat, dan Keluar
     if (mNavProducts) mNavProducts.classList.add('hidden');
-    if (mNavReports) mNavReports.classList.add('hidden');
+    if (mNavReports) mNavReports.classList.remove('hidden');
+    if (iconMNavReports) iconMNavReports.className = 'fa-solid fa-receipt text-base';
+    if (labelMNavReports) labelMNavReports.innerText = 'Riwayat';
     if (mNavMenu) mNavMenu.classList.add('hidden');
     if (mNavLogout) mNavLogout.classList.remove('hidden');
   } else if (isAdmin) {
@@ -2454,6 +2466,10 @@ function applyRolePermissions() {
     if (sidebarAdminMenu) sidebarAdminMenu.classList.remove('hidden');
     if (sidebarCloudStatus) sidebarCloudStatus.classList.remove('hidden');
     if (sidebarStoreSwitchIcon) sidebarStoreSwitchIcon.classList.remove('hidden');
+
+    if (btnNavReports) btnNavReports.classList.remove('hidden');
+    if (iconNavReports) iconNavReports.className = 'fa-solid fa-chart-line text-lg';
+    if (labelNavReports) labelNavReports.innerText = 'Laporan Penjualan';
 
     if (headerStoreSwitch) headerStoreSwitch.classList.remove('hidden');
     if (headerAdminTools) {
@@ -2464,6 +2480,8 @@ function applyRolePermissions() {
 
     if (mNavProducts) mNavProducts.classList.remove('hidden');
     if (mNavReports) mNavReports.classList.remove('hidden');
+    if (iconMNavReports) iconMNavReports.className = 'fa-solid fa-chart-line text-base';
+    if (labelMNavReports) labelMNavReports.innerText = 'Laporan';
     if (mNavMenu) mNavMenu.classList.remove('hidden');
     if (mNavLogout) mNavLogout.classList.add('hidden');
   }
@@ -2488,8 +2506,37 @@ function applyRolePermissions() {
     if (mDrawerReset) mDrawerReset.classList.remove('hidden');
   }
 
+  applyReportsRoleUI();
   updateAuthUI();
   updateSempolQuickBarUI();
+}
+
+function applyReportsRoleUI() {
+  const isCashier = State.currentUser?.role === 'cashier';
+  const tabFinance = document.getElementById('btn-tab-report-finance');
+  const tabSempol = document.getElementById('btn-tab-report-sempol');
+  const tabSalesLabel = document.querySelector('#btn-tab-report-sales span');
+  const profitCard = document.getElementById('report-stat-profit')?.closest('.bg-dark-900');
+  const chartSection = document.getElementById('sales-trend-canvas')?.closest('.grid');
+  const sempolSoldContainer = document.getElementById('report-stat-sempol-container');
+
+  if (isCashier) {
+    if (tabFinance) tabFinance.classList.add('hidden');
+    if (tabSempol) tabSempol.classList.add('hidden');
+    if (tabSalesLabel) tabSalesLabel.innerText = 'Daftar Transaksi';
+    if (profitCard) profitCard.classList.add('hidden');
+    if (chartSection) chartSection.classList.add('hidden');
+    if (sempolSoldContainer) sempolSoldContainer.classList.add('hidden');
+    if (typeof switchReportTab === 'function') switchReportTab('sales');
+  } else {
+    if (tabFinance) tabFinance.classList.remove('hidden');
+    const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
+    if (tabSempol && isSempolMode) tabSempol.classList.remove('hidden');
+    if (tabSalesLabel) tabSalesLabel.innerText = 'Analitik Penjualan';
+    if (profitCard) profitCard.classList.remove('hidden');
+    if (chartSection) chartSection.classList.remove('hidden');
+    if (sempolSoldContainer && isSempolMode) sempolSoldContainer.classList.remove('hidden');
+  }
 }
 
 // ----------------------------------------------------
@@ -3936,6 +3983,7 @@ async function updateSempolQuickBarUI() {
   const bar = document.getElementById('sempol-quick-bar');
   if (!bar) return;
 
+  const isAdmin = State.currentUser?.role === 'admin';
   const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
   const sempolTabBtn = document.getElementById('btn-tab-report-sempol');
   if (sempolTabBtn) {
@@ -3979,13 +4027,17 @@ async function updateSempolQuickBarUI() {
     const soldBadge = document.getElementById('sempol-sold-count-badge');
     const soldEl = document.getElementById('sempol-sold-count-val');
     if (soldEl) soldEl.innerText = totalSoldSticks.toLocaleString('id-ID');
-    if (soldBadge) soldBadge.classList.remove('hidden');
+    if (soldBadge) {
+      if (isAdmin) {
+        soldBadge.classList.remove('hidden');
+      } else {
+        soldBadge.classList.add('hidden');
+      }
+    }
   } catch (_) {}
 
   const costEl = document.getElementById('sempol-unit-cost-val');
   if (costEl) costEl.innerText = unitCost.toLocaleString('id-ID');
-
-  const isAdmin = State.currentUser?.role === 'admin';
 
   // Modal satuan hanya bisa dilihat oleh Admin
   const costContainer = document.getElementById('sempol-unit-cost-container');
