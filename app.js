@@ -2513,25 +2513,39 @@ function applyRolePermissions() {
 
 function applyReportsRoleUI() {
   const isCashier = State.currentUser?.role === 'cashier';
+  const subtabsContainer = document.getElementById('report-subtabs-container');
   const tabFinance = document.getElementById('btn-tab-report-finance');
   const tabSempol = document.getElementById('btn-tab-report-sempol');
+  const headerTitle = document.getElementById('report-header-title');
+  const headerDesc = document.getElementById('report-header-desc');
   const tabSalesLabel = document.querySelector('#btn-tab-report-sales span');
   const profitCard = document.getElementById('report-stat-profit')?.closest('.bg-dark-900');
   const chartSection = document.getElementById('sales-trend-canvas')?.closest('.grid');
   const sempolSoldContainer = document.getElementById('report-stat-sempol-container');
 
   if (isCashier) {
+    // Sembunyikan seluruh container sub-tab (Buku Kas & Laba Rugi serta Kartu Stok Sempol)
+    if (subtabsContainer) subtabsContainer.classList.add('hidden');
     if (tabFinance) tabFinance.classList.add('hidden');
     if (tabSempol) tabSempol.classList.add('hidden');
+    if (headerTitle) headerTitle.innerText = 'Riwayat Transaksi';
+    if (headerDesc) headerDesc.innerText = 'Daftar transaksi penjualan & cetak ulang struk';
     if (tabSalesLabel) tabSalesLabel.innerText = 'Daftar Transaksi';
     if (profitCard) profitCard.classList.add('hidden');
     if (chartSection) chartSection.classList.add('hidden');
     if (sempolSoldContainer) sempolSoldContainer.classList.add('hidden');
     if (typeof switchReportTab === 'function') switchReportTab('sales');
   } else {
+    // Tampilkan sub-tab lengkap untuk Admin
+    if (subtabsContainer) subtabsContainer.classList.remove('hidden');
     if (tabFinance) tabFinance.classList.remove('hidden');
     const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
-    if (tabSempol && isSempolMode) tabSempol.classList.remove('hidden');
+    if (tabSempol) {
+      if (isSempolMode) tabSempol.classList.remove('hidden');
+      else tabSempol.classList.add('hidden');
+    }
+    if (headerTitle) headerTitle.innerText = 'Dasbor & Laporan';
+    if (headerDesc) headerDesc.innerText = 'Analisis performa penjualan, pembukuan kas, dan kartu stok';
     if (tabSalesLabel) tabSalesLabel.innerText = 'Analitik Penjualan';
     if (profitCard) profitCard.classList.remove('hidden');
     if (chartSection) chartSection.classList.remove('hidden');
@@ -3987,7 +4001,7 @@ async function updateSempolQuickBarUI() {
   const isSempolMode = DB.getActiveStoreId() === 'store_sempol' || State.products.some(p => p.isSempol);
   const sempolTabBtn = document.getElementById('btn-tab-report-sempol');
   if (sempolTabBtn) {
-    if (isSempolMode) {
+    if (isAdmin && isSempolMode) {
       sempolTabBtn.classList.remove('hidden');
     } else {
       sempolTabBtn.classList.add('hidden');
@@ -4335,6 +4349,11 @@ async function saveSempolStockHandler(e) {
 // ====================================================
 
 function switchReportTab(tab) {
+  // Cegah Kasir membuka tab finance atau sempol
+  if (State.currentUser?.role === 'cashier' && tab !== 'sales') {
+    tab = 'sales';
+  }
+
   const salesBtn = document.getElementById('btn-tab-report-sales');
   const financeBtn = document.getElementById('btn-tab-report-finance');
   const sempolBtn = document.getElementById('btn-tab-report-sempol');

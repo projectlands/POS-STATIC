@@ -605,8 +605,8 @@
                 <i class="fa-solid fa-chart-pie text-sm"></i>
               </div>
               <div>
-                <h3 class="text-base sm:text-lg font-bold text-white">Dasbor &amp; Laporan</h3>
-                <p class="text-[11px] text-slate-400">Analisis performa penjualan, pembukuan kas, dan kartu stok</p>
+                <h3 id="report-header-title" class="text-base sm:text-lg font-bold text-white">Dasbor &amp; Laporan</h3>
+                <p id="report-header-desc" class="text-[11px] text-slate-400">Analisis performa penjualan, pembukuan kas, dan kartu stok</p>
               </div>
             </div>
 
@@ -625,7 +625,7 @@
           </div>
 
           <!-- Bottom Row: Sub-Tab Switcher (Responsive, Horizontal Scrollable without overflowing screen) -->
-          <div class="w-full overflow-x-auto pb-1 max-w-full">
+          <div id="report-subtabs-container" class="w-full overflow-x-auto pb-1 max-w-full">
             <div class="inline-flex items-center gap-1.5 p-1 bg-dark-950 border border-slate-800 rounded-xl min-w-max">
               <button id="btn-tab-report-sales" onclick="switchReportTab('sales')" class="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all bg-primary-600 text-white shadow-glow-primary whitespace-nowrap flex-shrink-0">
                 <i class="fa-solid fa-chart-pie"></i>
