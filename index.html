@@ -1393,6 +1393,11 @@
             <span>Cetak Printer</span>
           </button>
         </div>
+        <!-- Row 3: Void / Cancel Transaction (Admin Only) -->
+        <button type="button" onclick="cancelTransactionHandler(State.currentReceiptTx?.id)" class="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold rounded-xl text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
+          <i class="fa-solid fa-ban text-xs"></i>
+          <span>Batalkan / Hapus Transaksi Ini (Admin)</span>
+        </button>
       </div>
     </div>
   </div>

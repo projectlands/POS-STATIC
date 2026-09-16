@@ -284,8 +284,17 @@ const DB = {
     return res;
   },
 
-  deleteTransaction(id) {
-    return this.execute('transactions', 'readwrite', (store) => store.delete(id));
+  async deleteTransaction(id) {
+    let res = await this.execute('transactions', 'readwrite', (store) => store.delete(id));
+    if (typeof id === 'string' && !isNaN(id)) {
+      await this.execute('transactions', 'readwrite', (store) => store.delete(Number(id)));
+    } else if (typeof id === 'number') {
+      await this.execute('transactions', 'readwrite', (store) => store.delete(String(id)));
+    }
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.deleteTransaction(id).catch(console.error);
+    }
+    return res;
   },
 
   // Settings CRUD

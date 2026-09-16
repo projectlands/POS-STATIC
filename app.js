@@ -1767,9 +1767,16 @@ function renderTransactionsHistoryTable(txList) {
           <td class="p-4 text-right text-slate-400">Rp ${(tx.taxSvc - tx.discount).toLocaleString('id-ID')}</td>
           <td class="p-4 text-right font-bold text-white">Rp ${tx.total.toLocaleString('id-ID')}</td>
           <td class="p-4 text-right pr-6">
-            <button onclick="viewTransactionDetail('${tx.id}')" class="text-xs text-primary-500 hover:underline">
-              Lihat Struk
-            </button>
+            <div class="flex items-center justify-end gap-2">
+              <button onclick="viewTransactionDetail('${tx.id}')" class="text-xs text-primary-400 hover:text-primary-300 font-semibold transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-receipt text-[11px]"></i>
+                <span>Struk</span>
+              </button>
+              <button onclick="cancelTransactionHandler('${tx.id}')" class="text-xs text-rose-400/80 hover:text-rose-400 font-semibold transition-colors flex items-center gap-1 p-1 hover:bg-rose-500/10 rounded" title="Batalkan / Hapus Transaksi (Khusus Admin)">
+                <i class="fa-solid fa-ban text-[11px]"></i>
+                <span>Batal</span>
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -1808,9 +1815,16 @@ function renderTransactionsHistoryTable(txList) {
             <div class="flex items-center gap-3.5 flex-shrink-0">
               <div class="text-right">
                 <div class="font-extrabold text-sm text-white">Rp ${tx.total.toLocaleString('id-ID')}</div>
-                <button onclick="viewTransactionDetail('${tx.id}')" class="text-[10px] text-primary-500 hover:underline mt-0.5 block">
-                  Lihat Struk
-                </button>
+                <div class="flex items-center justify-end gap-2 mt-1">
+                  <button onclick="viewTransactionDetail('${tx.id}')" class="text-[11px] text-primary-400 font-semibold hover:underline">
+                    Struk
+                  </button>
+                  <span class="text-slate-600 text-xs">•</span>
+                  <button onclick="cancelTransactionHandler('${tx.id}')" class="text-[11px] text-rose-400 font-semibold hover:underline flex items-center gap-0.5" title="Batalkan Transaksi (Admin)">
+                    <i class="fa-solid fa-ban text-[9px]"></i>
+                    <span>Batal</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1823,9 +1837,89 @@ function renderTransactionsHistoryTable(txList) {
 
 async function viewTransactionDetail(txId) {
   const transactions = await DB.getTransactions();
-  const tx = transactions.find(t => t.id === txId);
+  const tx = transactions.find(t => String(t.id) === String(txId));
   if (tx) {
     renderReceipt(tx);
+  }
+}
+
+async function cancelTransactionHandler(txId) {
+  if (!txId) return;
+
+  // 1. Verifikasi hak akses khusus Admin
+  if (!requireAdmin(() => cancelTransactionHandler(txId))) return;
+
+  // 2. Ambil data transaksi
+  const transactions = await DB.getTransactions();
+  const tx = transactions.find(t => String(t.id) === String(txId));
+  if (!tx) {
+    alert('Transaksi tidak ditemukan.');
+    return;
+  }
+
+  const dateStr = new Date(tx.timestamp || Date.now()).toLocaleString('id-ID');
+  const confirmMsg = `Batalkan & Hapus Transaksi #${tx.id}?\n\n` +
+    `• Total: Rp ${(tx.total || 0).toLocaleString('id-ID')}\n` +
+    `• Tanggal: ${dateStr}\n` +
+    `• Metode: ${tx.paymentMethod || 'Tunai'}\n\n` +
+    `⚠️ PENTING: Seluruh stok barang / tusukan sempol yang terjual pada transaksi ini akan OTOMATIS DIKEMBALIKAN ke kasir.\n\n` +
+    `Apakah Anda yakin ingin membatalkan transaksi ini?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    // 3. Kembalikan stok barang yang terjual
+    let totalSempolRestored = 0;
+    const allProducts = await DB.getProducts();
+
+    if (Array.isArray(tx.items)) {
+      for (const item of tx.items) {
+        if (item.isSempol) {
+          const sempolTusuk = (Number(item.piecesPerUnit) || 1) * (Number(item.quantity) || 1);
+          totalSempolRestored += sempolTusuk;
+        } else {
+          // Produk retail / minuman biasa: kembalikan stok
+          const prod = allProducts.find(p => String(p.id) === String(item.id) || p.code === item.code || p.name === item.name);
+          if (prod) {
+            prod.stock = (Number(prod.stock) || 0) + (Number(item.quantity) || 1);
+            await DB.saveProduct(prod);
+          }
+        }
+      }
+    }
+
+    // Kembalikan stok bahan tusuk sempol jika ada menu sempol
+    if (totalSempolRestored > 0 && typeof DB.getSempolStock === 'function' && typeof DB.updateSempolStock === 'function') {
+      const currentStock = await DB.getSempolStock();
+      const newStock = currentStock + totalSempolRestored;
+      await DB.updateSempolStock(newStock);
+      console.log(`[CancelTx] Mengembalikan ${totalSempolRestored} tusuk sempol. Stok baru: ${newStock}`);
+    }
+
+    // 4. Hapus transaksi dari database lokal & Firebase
+    await DB.deleteTransaction(tx.id);
+
+    // 5. Tutup modal struk jika sedang terbuka
+    closeReceiptModal();
+
+    // 6. Muat ulang laporan dan data kasir
+    await loadInitialData();
+    renderProducts();
+    updateSempolQuickBarUI();
+    if (typeof loadReportData === 'function') {
+      await loadReportData();
+    }
+    if (typeof loadSempolStockReportData === 'function') {
+      await loadSempolStockReportData();
+    }
+
+    const stockMsg = totalSempolRestored > 0 
+      ? ` & +${totalSempolRestored} tusuk sempol dikembalikan ke stok kasir!` 
+      : ' & stok barang dikembalikan ke kasir!';
+    showToast(`Transaksi #${tx.id} berhasil dibatalkan${stockMsg}`, 'success');
+  } catch (err) {
+    console.error('Failed to cancel transaction:', err);
+    alert('Gagal membatalkan transaksi: ' + err.message);
   }
 }
 

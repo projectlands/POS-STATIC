@@ -271,6 +271,25 @@ const CloudDB = {
     }
   },
 
+  async deleteTransaction(id) {
+    if (!this.isEnabled) return;
+    const config = this.getConfig();
+    try {
+      if (this.provider === 'mysql' && config?.mysqlApiUrl) {
+        await fetch(config.mysqlApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete_transaction', id: id, key: config.mysqlApiKey, storeId: this.getActiveStoreId() })
+        }).catch(() => {});
+      } else if (this.firestore) {
+        await this.getCollection('transactions').doc(String(id)).delete();
+        console.log('Transaction deleted from Firestore:', id, 'Store:', this.getActiveStoreId());
+      }
+    } catch (err) {
+      console.error('Failed to delete transaction in remote database:', err);
+    }
+  },
+
   async syncProduct(product) {
     if (!this.isEnabled) return;
     const config = this.getConfig();
