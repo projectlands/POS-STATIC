@@ -491,6 +491,32 @@ function updateCartQty(productId, amount) {
   renderCart();
 }
 
+function setCartItemQty(productId, rawValue) {
+  const item = State.cart.find(i => i.product.id === productId);
+  if (!item) return;
+
+  const parsed = parseInt(rawValue, 10);
+  if (isNaN(parsed) || parsed <= 0) {
+    if (confirm(`Hapus "${item.product.name}" dari keranjang?`)) {
+      removeCartItem(productId);
+    } else {
+      renderCart();
+    }
+    return;
+  }
+
+  const maxStock = Number(item.product.stock);
+  if (!isNaN(maxStock) && maxStock > 0 && parsed > maxStock) {
+    alert(`Stok tidak mencukupi. Sisa stok tersedia: ${maxStock}`);
+    item.quantity = maxStock;
+    renderCart();
+    return;
+  }
+
+  item.quantity = parsed;
+  renderCart();
+}
+
 function removeCartItem(productId) {
   State.cart = State.cart.filter(i => i.product.id !== productId);
   renderCart();
@@ -586,18 +612,30 @@ function renderCart() {
           </div>
         </div>
 
-        <!-- Quantity Adjuster -->
-        <div class="flex items-center gap-2.5 flex-shrink-0">
-          <button onclick="updateCartQty(${item.product.id}, -1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center text-xs transition-colors">
+        <!-- Quantity Adjuster (Ketik langsung atau klik +/-) -->
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <button type="button" onclick="updateCartQty(${item.product.id}, -1)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold flex items-center justify-center text-xs transition-all" title="Kurangi 1">
             <i class="fa-solid fa-minus text-[9px]"></i>
           </button>
-          <span class="font-bold text-white text-xs w-4 text-center">${item.quantity}</span>
-          <button onclick="updateCartQty(${item.product.id}, 1)" class="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center text-xs transition-colors">
+          
+          <input 
+            type="number" 
+            min="1" 
+            max="${item.product.stock || 9999}" 
+            value="${item.quantity}" 
+            onchange="setCartItemQty(${item.product.id}, this.value)" 
+            onkeydown="if(event.key==='Enter') this.blur()"
+            onfocus="this.select()"
+            class="w-12 h-7 text-center font-extrabold text-white text-xs bg-dark-900 border border-slate-700/80 rounded-lg focus:outline-none focus:border-primary-500 focus:bg-slate-800 focus:ring-1 focus:ring-primary-500 transition-all select-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-text shadow-inner"
+            title="Ketik jumlah kuantitas langsung"
+          />
+          
+          <button type="button" onclick="updateCartQty(${item.product.id}, 1)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold flex items-center justify-center text-xs transition-all" title="Tambah 1">
             <i class="fa-solid fa-plus text-[9px]"></i>
           </button>
           
           <!-- Delete button -->
-          <button onclick="removeCartItem(${item.product.id})" class="text-slate-600 hover:text-danger-500 transition-colors ml-1.5">
+          <button type="button" onclick="removeCartItem(${item.product.id})" class="w-7 h-7 rounded-lg hover:bg-rose-500/15 text-slate-500 hover:text-rose-400 transition-colors flex items-center justify-center ml-0.5" title="Hapus item">
             <i class="fa-regular fa-trash-can text-sm"></i>
           </button>
         </div>
