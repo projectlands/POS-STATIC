@@ -243,13 +243,17 @@ const AIAgent = {
       let responseText = '';
 
       if (this.apiKey && this.apiKey.length > 10) {
-        // Mode Online via Gemini LLM
+        // Mode Online via Gemini LLM (dengan Multi-Model Fallback Otomatis)
         try {
           responseText = await this.queryGemini(trimmed, snapshot);
         } catch (apiError) {
           console.warn('Gagal memanggil Gemini API, beralih ke Smart Offline Engine:', apiError);
-          responseText = `⚠️ *Koneksi Gemini API terkendala (${apiError.message}). Menggunakan analisis Smart Engine internal:* \n\n` +
-            this.generateSmartOfflineResponse(trimmed, snapshot);
+          const errLower = (apiError.message || '').toLowerCase();
+          const isHighDemand = errLower.includes('demand') || errLower.includes('503') || errLower.includes('429') || errLower.includes('overloaded');
+          const noticeText = isHighDemand
+            ? `ℹ️ *Server Google AI sedang mengalami antrean trafik tinggi (High Demand). Sistem otomatis mengalihkan ke analisis cerdas Smart Engine internal POS berbasis data riil toko Anda:* \n\n`
+            : `⚠️ *Koneksi Gemini AI terkendala (${apiError.message}). Menggunakan analisis Smart Engine internal:* \n\n`;
+          responseText = noticeText + this.generateSmartOfflineResponse(trimmed, snapshot);
         }
       } else {
         // Mode Offline Smart Rule-Based Engine
@@ -277,18 +281,19 @@ const AIAgent = {
     }
   },
 
-  // Query Google Gemini REST API
+  // Query Google Gemini REST API dengan Multi-Model Fallback
   async queryGemini(prompt, snapshot) {
-    let activeModel = this.selectedModel || 'auto';
-    if (activeModel === 'auto') {
-      // Prioritaskan model flash yang cepat dan hemat kuota
+    let primaryModel = this.selectedModel || 'auto';
+    if (primaryModel === 'auto') {
       const flashModel = (this.cachedModels || []).find(m => (m.name || '').includes('flash'));
-      activeModel = flashModel ? flashModel.name.replace(/^models\//, '') : 'gemini-1.5-flash';
+      primaryModel = flashModel ? flashModel.name.replace(/^models\//, '') : 'gemini-1.5-flash';
     } else {
-      activeModel = activeModel.replace(/^models\//, '');
+      primaryModel = primaryModel.replace(/^models\//, '');
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${this.apiKey}`;
+    // Urutan model alternatif jika server Google sedang sibuk (high demand)
+    const fallbackList = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+    const modelsToTry = [primaryModel, ...fallbackList.filter(m => m !== primaryModel)];
 
     const systemInstruction = `
 Kamu adalah "AI Asisten Bisnis & Financial Advisor CFO" profesional untuk usaha UMKM di Indonesia bernama "${snapshot.storeName}".
@@ -334,23 +339,52 @@ PANDUAN MENJAWAB:
       }
     };
 
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    let lastError = null;
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || `HTTP ${res.status}`);
+    // Coba model secara berurutan jika ada model yang high demand / 503
+    for (const model of modelsToTry) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          const errMsg = errJson.error?.message || `HTTP ${res.status}`;
+          
+          // Cek apakah server Google sedang sibuk/overloaded/rate-limited
+          const isOverloaded = res.status === 503 || res.status === 429 || res.status === 500 || 
+            errMsg.toLowerCase().includes('demand') || errMsg.toLowerCase().includes('overloaded') || 
+            errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('resource');
+          
+          if (isOverloaded) {
+            console.warn(`[AI Gemini] Model ${model} sibuk/overloaded (${errMsg}), mencoba model cadangan...`);
+            lastError = new Error(errMsg);
+            continue; // Coba model cadangan berikutnya
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await res.json();
+        const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (candidate && candidate.trim()) {
+          return candidate;
+        }
+      } catch (err) {
+        lastError = err;
+        const errMsgLower = (err.message || '').toLowerCase();
+        if (errMsgLower.includes('demand') || errMsgLower.includes('overloaded') || errMsgLower.includes('503') || errMsgLower.includes('429')) {
+          console.warn(`[AI Gemini] Kendala pada ${model}: ${err.message}, mencoba model berikutnya...`);
+          continue;
+        }
+        throw err;
+      }
     }
 
-    const data = await res.json();
-    const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!candidate) {
-      throw new Error('Tidak ada respon teks dari AI.');
-    }
-    return candidate;
+    throw lastError || new Error('Semua model Gemini saat ini sedang mengalami lonjakan antrean trafik tinggi.');
   },
 
   // Smart Offline Rule-Based & Statistical Engine
