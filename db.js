@@ -323,10 +323,24 @@ const DB = {
   },
 
   // Expenses CRUD (Buku Kas & Pengeluaran)
-  getExpenses() {
+  getExpenses(includeDeleted = false) {
     return new Promise((resolve) => {
       this.execute('expenses', 'readonly', (store) => store.getAll())
-        .then((res) => resolve(res || []))
+        .then((res) => {
+          const all = res || [];
+          resolve(includeDeleted ? all : all.filter(e => !e.isDeleted));
+        })
+        .catch(() => resolve([]));
+    });
+  },
+
+  getDeletedExpenses() {
+    return new Promise((resolve) => {
+      this.execute('expenses', 'readonly', (store) => store.getAll())
+        .then((res) => {
+          const all = res || [];
+          resolve(all.filter(e => !!e.isDeleted));
+        })
         .catch(() => resolve([]));
     });
   },
@@ -340,8 +354,43 @@ const DB = {
     return res;
   },
 
-  deleteExpense(id) {
-    return this.execute('expenses', 'readwrite', (store) => store.delete(Number(id)));
+  // Soft delete: tandai isDeleted agar bisa dipulihkan dari Kotak Sampah
+  async deleteExpense(id) {
+    const expense = await this.execute('expenses', 'readonly', (store) => store.get(Number(id)));
+    if (expense) {
+      expense.isDeleted = true;
+      expense.deletedAt = Date.now();
+      await this.execute('expenses', 'readwrite', (store) => store.put(expense));
+      if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+        CloudDB.syncExpense(expense).catch(console.error);
+      }
+      return true;
+    }
+    return false;
+  },
+
+  // Pulihkan catatan dari Kotak Sampah kembali ke Buku Kas
+  async restoreExpense(id) {
+    const expense = await this.execute('expenses', 'readonly', (store) => store.get(Number(id)));
+    if (expense) {
+      expense.isDeleted = false;
+      delete expense.deletedAt;
+      await this.execute('expenses', 'readwrite', (store) => store.put(expense));
+      if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+        CloudDB.syncExpense(expense).catch(console.error);
+      }
+      return expense;
+    }
+    return null;
+  },
+
+  // Hapus permanen selamanya dari database lokal dan Cloud
+  async permanentlyDeleteExpense(id) {
+    const res = await this.execute('expenses', 'readwrite', (store) => store.delete(Number(id)));
+    if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+      CloudDB.deleteExpense(id).catch(console.error);
+    }
+    return res;
   },
 
   // Import data dari Cloud Firestore ke IndexedDB Lokal
@@ -385,13 +434,16 @@ const DB = {
   },
 
   // Stock Mutations CRUD (Kartu Stok & Kulakan Tusuk Sempol)
-  getStockMutations() {
+  getStockMutations(includeDeleted = false) {
     return new Promise((resolve) => {
       if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
         return resolve([]);
       }
       this.execute('stock_mutations', 'readonly', (store) => store.getAll())
-        .then((res) => resolve(res || []))
+        .then((res) => {
+          const all = res || [];
+          resolve(includeDeleted ? all : all.filter(m => !m.isDeleted));
+        })
         .catch(() => resolve([]));
     });
   },
@@ -418,6 +470,40 @@ const DB = {
   },
 
   async deleteStockMutation(id) {
+    if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
+      return Promise.resolve(false);
+    }
+    const mut = await this.execute('stock_mutations', 'readonly', (store) => store.get(Number(id)));
+    if (mut) {
+      mut.isDeleted = true;
+      mut.deletedAt = Date.now();
+      await this.execute('stock_mutations', 'readwrite', (store) => store.put(mut));
+      if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+        CloudDB.syncStockMutation(mut).catch(console.error);
+      }
+      return true;
+    }
+    return false;
+  },
+
+  async restoreStockMutation(id) {
+    if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
+      return Promise.resolve(null);
+    }
+    const mut = await this.execute('stock_mutations', 'readonly', (store) => store.get(Number(id)));
+    if (mut) {
+      mut.isDeleted = false;
+      delete mut.deletedAt;
+      await this.execute('stock_mutations', 'readwrite', (store) => store.put(mut));
+      if (typeof CloudDB !== 'undefined' && CloudDB.isEnabled) {
+        CloudDB.syncStockMutation(mut).catch(console.error);
+      }
+      return mut;
+    }
+    return null;
+  },
+
+  async permanentlyDeleteStockMutation(id) {
     if (!this.db || !this.db.objectStoreNames.contains('stock_mutations')) {
       return Promise.resolve(false);
     }

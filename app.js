@@ -3343,11 +3343,27 @@ window.onCloudStoreInfoUpdated = async function(info) {
 // MOBILE MENU DRAWER (MODAL BOTTOM SHEET)
 // ====================================================
 
-function openMobileMenuModal() {
+async function openMobileMenuModal() {
   const modal = document.getElementById('modal-mobile-menu');
   if (!modal) return;
   updateStoreBrandingUI();
   updateCloudStatusUI(CloudDB.status, CloudDB.statusMessage);
+
+  try {
+    if (typeof DB.getDeletedExpenses === 'function') {
+      const deleted = await DB.getDeletedExpenses();
+      const badge = document.getElementById('m-menu-trash-badge');
+      if (badge) {
+        if (deleted.length > 0) {
+          badge.innerText = deleted.length;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+    }
+  } catch (_) {}
+
   modal.classList.remove('hidden');
 }
 
@@ -4335,6 +4351,18 @@ async function loadFinancialReportData(startTimestamp = null, endTimestamp = nul
     elPnlNet.className = realNetProfit >= 0 ? "font-extrabold text-emerald-400" : "font-extrabold text-rose-400";
   }
 
+  // Update Kotak Sampah Badge
+  const deletedExpenses = (typeof DB.getDeletedExpenses === 'function') ? await DB.getDeletedExpenses() : [];
+  const trashBadge = document.getElementById('badge-trash-count');
+  if (trashBadge) {
+    if (deletedExpenses.length > 0) {
+      trashBadge.innerText = deletedExpenses.length;
+      trashBadge.classList.remove('hidden');
+    } else {
+      trashBadge.classList.add('hidden');
+    }
+  }
+
   // Render Table & Mobile List
   renderExpensesTable(filteredExpenses);
 }
@@ -4385,7 +4413,7 @@ function renderExpensesTable(expenseList) {
           <td class="p-3.5 pl-5 text-slate-400">${exp.date || '-'}</td>
           <td class="p-3.5">${getBadge(exp.type)}</td>
           <td class="p-3.5 font-bold text-white">${exp.title}</td>
-          <td class="p-3.5 text-slate-400 max-w-xs truncate">${exp.note || '-'}</td>
+          <td class="p-3.5 text-slate-400 max-w-xs truncate">${exp.notes || exp.note || '-'}</td>
           <td class="p-3.5 text-right font-bold ${isCapital ? 'text-sky-400' : 'text-rose-400'}">
             ${isCapital ? '+' : '-'} Rp ${(exp.amount || 0).toLocaleString('id-ID')}
           </td>
@@ -4419,14 +4447,14 @@ function renderExpensesTable(expenseList) {
                 ${getBadge(exp.type)}
                 <span class="text-[10px] text-slate-500">${exp.date}</span>
               </div>
-              <div class="font-bold text-slate-200 text-sm truncate">${exp.title}</div>
-              ${exp.note ? `<p class="text-[10px] text-slate-400 truncate">${exp.note}</p>` : ''}
+              <h5 class="font-bold text-white text-xs truncate">${exp.title}</h5>
+              ${(exp.notes || exp.note) ? `<p class="text-[11px] text-slate-400 truncate max-w-xs">${exp.notes || exp.note}</p>` : ''}
             </div>
-            <div class="flex items-center gap-3 flex-shrink-0">
-              <div class="text-right font-extrabold text-sm ${isCapital ? 'text-sky-400' : 'text-rose-400'}">
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="font-bold text-xs ${isCapital ? 'text-sky-400' : 'text-rose-400'}">
                 ${isCapital ? '+' : '-'} Rp ${(exp.amount || 0).toLocaleString('id-ID')}
-              </div>
-              <button onclick="deleteExpenseHandler(${exp.id})" class="p-2 text-slate-500 hover:text-danger-500 rounded">
+              </span>
+              <button onclick="deleteExpenseHandler(${exp.id})" class="p-1.5 text-slate-500 hover:text-danger-500 rounded">
                 <i class="fa-solid fa-trash-can text-xs"></i>
               </button>
             </div>
@@ -4435,6 +4463,193 @@ function renderExpensesTable(expenseList) {
       });
       mobList.innerHTML = mHtml;
     }
+  }
+}
+
+// ====================================================
+// KOTAK SAMPAH & PULIHKAN (TRASH RECYCLE BIN & RESTORE)
+// ====================================================
+
+function openExpenseTrashModal() {
+  if (!requireAdmin(() => openExpenseTrashModal())) return;
+  const modal = document.getElementById('modal-expense-trash');
+  if (!modal) return;
+  renderTrashModalList();
+  modal.classList.remove('hidden');
+}
+
+function closeExpenseTrashModal() {
+  const modal = document.getElementById('modal-expense-trash');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function renderTrashModalList() {
+  const container = document.getElementById('trash-list-container');
+  const emptyState = document.getElementById('trash-empty-state');
+  const badgeModal = document.getElementById('trash-modal-badge-count');
+  const btnEmpty = document.getElementById('btn-empty-trash');
+  if (!container) return;
+
+  const deletedList = (typeof DB.getDeletedExpenses === 'function') ? await DB.getDeletedExpenses() : [];
+  const sorted = [...deletedList].sort((a, b) => (b.deletedAt || b.timestamp || 0) - (a.deletedAt || a.timestamp || 0));
+
+  if (badgeModal) badgeModal.innerText = `${sorted.length} Catatan`;
+  if (btnEmpty) {
+    if (sorted.length === 0) btnEmpty.classList.add('opacity-40', 'pointer-events-none');
+    else btnEmpty.classList.remove('opacity-40', 'pointer-events-none');
+  }
+
+  if (sorted.length === 0) {
+    container.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+    return;
+  }
+
+  if (emptyState) emptyState.classList.add('hidden');
+
+  let html = '';
+  sorted.forEach(exp => {
+    const isKulakan = exp.category === 'Bahan Baku' || exp.tusukQty || (exp.title && exp.title.includes('Kulakan Sempol'));
+    let tusukQty = exp.tusukQty;
+    if (!tusukQty && exp.title) {
+      const match = exp.title.match(/(\d+)\s*Tusuk/i);
+      if (match) tusukQty = Number(match[1]);
+    }
+
+    const delDateStr = exp.deletedAt ? new Date(exp.deletedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+
+    html += `
+      <div class="p-3.5 rounded-xl bg-dark-950 border border-slate-800 hover:border-slate-700/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="space-y-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isKulakan ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-slate-700/30 text-slate-300 border border-slate-700'}">
+              ${isKulakan ? '🍗 Kulakan Sempol' : (exp.category || exp.type || 'Pengeluaran')}
+            </span>
+            ${tusukQty ? `<span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-primary-500/20 text-primary-300 border border-primary-500/30">+${tusukQty} Tusuk</span>` : ''}
+            <span class="text-[10px] text-slate-500"><i class="fa-regular fa-clock mr-1"></i>Dihapus: ${delDateStr}</span>
+          </div>
+          <h5 class="text-xs font-bold text-white truncate">${exp.title || 'Catatan Biaya'}</h5>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+            <span>Tgl Catatan: <strong class="text-slate-300">${exp.date || '-'}</strong></span>
+            <span>•</span>
+            <span>Nominal: <strong class="text-rose-400">Rp ${(exp.amount || 0).toLocaleString('id-ID')}</strong></span>
+            ${(exp.notes || exp.note) ? `<span>•</span><span class="truncate max-w-xs text-slate-500">${exp.notes || exp.note}</span>` : ''}
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+          <button onclick="restoreExpenseHandler(${exp.id})" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Pulihkan</span>
+          </button>
+          <button onclick="permanentDeleteExpenseHandler(${exp.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 text-xs transition-all" title="Hapus Permanen">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+async function restoreExpenseHandler(id) {
+  if (!requireAdmin(() => restoreExpenseHandler(id))) return;
+
+  const deletedList = (typeof DB.getDeletedExpenses === 'function') ? await DB.getDeletedExpenses() : [];
+  const expense = deletedList.find(e => String(e.id) === String(id));
+  if (!expense) return;
+
+  let restoreStockQty = 0;
+  if (expense.tusukQty) {
+    restoreStockQty = Number(expense.tusukQty);
+  } else if (expense.category === 'Bahan Baku' && expense.title && expense.title.includes('Kulakan Sempol:')) {
+    const match = expense.title.match(/(\d+)\s*Tusuk/i);
+    if (match) restoreStockQty = Number(match[1]);
+  }
+
+  const confirmMsg = restoreStockQty > 0
+    ? `Pulihkan catatan kulakan ini? Stok tusuk sempol juga akan ditambahkan kembali sebanyak +${restoreStockQty} tusuk ke gerobak.`
+    : `Pulihkan catatan pengeluaran "${expense.title}" kembali ke Buku Kas?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    // 1. Tambah kembali stok sempol jika ini pengeluaran kulakan
+    if (restoreStockQty > 0 && typeof DB.getSempolStock === 'function' && typeof DB.updateSempolStock === 'function') {
+      const currentStock = await DB.getSempolStock();
+      const newStock = currentStock + restoreStockQty;
+      await DB.updateSempolStock(newStock);
+      console.log(`[Sempol] Stock restored from ${currentStock} to ${newStock} tusuk`);
+    }
+
+    // 2. Pulihkan mutasi stok jika ada
+    if (expense.linkedMutationId && typeof DB.restoreStockMutation === 'function') {
+      await DB.restoreStockMutation(expense.linkedMutationId);
+    }
+
+    // 3. Pulihkan catatan expense
+    await DB.restoreExpense(id);
+
+    // 4. Update UI
+    await loadInitialData();
+    renderProducts();
+    updateSempolQuickBarUI();
+    await loadFinancialReportData();
+    if (typeof loadSempolStockReportData === 'function') {
+      await loadSempolStockReportData();
+    }
+    renderTrashModalList();
+
+    showToast(restoreStockQty > 0 ? `Catatan kulakan berhasil dipulihkan & stok ditambah +${restoreStockQty} tusuk!` : "Catatan pengeluaran berhasil dipulihkan!", 'success');
+  } catch (err) {
+    console.error('Failed to restore expense:', err);
+    alert('Gagal memulihkan catatan: ' + err.message);
+  }
+}
+
+async function permanentDeleteExpenseHandler(id) {
+  if (!requireAdmin(() => permanentDeleteExpenseHandler(id))) return;
+  if (!confirm("Hapus permanen catatan ini? Tindakan ini tidak dapat dibatalkan.")) return;
+
+  try {
+    const allDeleted = (typeof DB.getDeletedExpenses === 'function') ? await DB.getDeletedExpenses() : [];
+    const expense = allDeleted.find(e => String(e.id) === String(id));
+    if (expense && expense.linkedMutationId && typeof DB.permanentlyDeleteStockMutation === 'function') {
+      await DB.permanentlyDeleteStockMutation(expense.linkedMutationId);
+    }
+    await DB.permanentlyDeleteExpense(id);
+    await loadFinancialReportData();
+    renderTrashModalList();
+    showToast("Catatan berhasil dihapus permanen.", 'info');
+  } catch (err) {
+    console.error('Failed to permanently delete expense:', err);
+    alert('Gagal menghapus permanen: ' + err.message);
+  }
+}
+
+async function emptyTrashHandler() {
+  if (!requireAdmin(() => emptyTrashHandler())) return;
+  const deletedList = (typeof DB.getDeletedExpenses === 'function') ? await DB.getDeletedExpenses() : [];
+  if (deletedList.length === 0) {
+    alert("Kotak sampah sudah kosong.");
+    return;
+  }
+  if (!confirm(`Kosongkan semua (${deletedList.length}) catatan di kotak sampah secara permanen?`)) return;
+
+  try {
+    for (const exp of deletedList) {
+      if (exp.linkedMutationId && typeof DB.permanentlyDeleteStockMutation === 'function') {
+        await DB.permanentlyDeleteStockMutation(exp.linkedMutationId);
+      }
+      await DB.permanentlyDeleteExpense(exp.id);
+    }
+    await loadFinancialReportData();
+    renderTrashModalList();
+    closeExpenseTrashModal();
+    showToast("Kotak sampah berhasil dikosongkan.", 'success');
+  } catch (err) {
+    console.error('Failed to empty trash:', err);
+    alert('Gagal mengosongkan kotak sampah: ' + err.message);
   }
 }
 
