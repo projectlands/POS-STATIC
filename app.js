@@ -3878,8 +3878,9 @@ async function saveSempolPurchaseHandler(e) {
   }
 
   // 2. Save stock mutation log
+  let savedMutationId = null;
   if (typeof DB.saveStockMutation === 'function') {
-    await DB.saveStockMutation({
+    savedMutationId = await DB.saveStockMutation({
       type: 'supplier_in',
       date: dateStr || new Date().toISOString().split('T')[0],
       timestamp: timestamp,
@@ -3902,7 +3903,9 @@ async function saveSempolPurchaseHandler(e) {
       amount: totalCost,
       date: dateStr || new Date().toISOString().split('T')[0],
       notes: notes ? `Nota: ${notes} | @ Rp ${unitCost}/tusuk` : `@ Rp ${unitCost}/tusuk`,
-      timestamp: timestamp
+      timestamp: timestamp,
+      linkedMutationId: savedMutationId,
+      tusukQty: qty
     });
   }
 
@@ -4116,11 +4119,61 @@ async function saveExpenseHandler(e) {
 
 async function deleteExpenseHandler(id) {
   if (!requireAdmin(() => deleteExpenseHandler(id))) return;
-  if (confirm("Apakah Anda yakin ingin menghapus catatan biaya ini?")) {
+
+  const allExpenses = (typeof DB.getExpenses === 'function') ? await DB.getExpenses() : [];
+  const expense = allExpenses.find(e => String(e.id) === String(id));
+
+  let revertStockQty = 0;
+  let linkedMutation = null;
+
+  if (expense) {
+    if (expense.tusukQty) {
+      revertStockQty = Number(expense.tusukQty);
+    } else if (expense.category === 'Bahan Baku' && expense.title && expense.title.includes('Kulakan Sempol:')) {
+      const match = expense.title.match(/(\d+)\s*Tusuk/i);
+      if (match) revertStockQty = Number(match[1]);
+    }
+
+    const mutations = (typeof DB.getStockMutations === 'function') ? await DB.getStockMutations() : [];
+    if (expense.linkedMutationId) {
+      linkedMutation = mutations.find(m => String(m.id) === String(expense.linkedMutationId));
+    } else if (revertStockQty > 0) {
+      linkedMutation = mutations.find(m => m.type === 'supplier_in' && Number(m.tusuk) === revertStockQty && Math.abs((m.timestamp || 0) - (expense.timestamp || 0)) < 120000);
+    }
+  }
+
+  const confirmMsg = revertStockQty > 0
+    ? `Hapus catatan pengeluaran kulakan ini? Stok tusuk sempol juga akan otomatis dikurangi kembali sebanyak ${revertStockQty} tusuk.`
+    : "Apakah Anda yakin ingin menghapus catatan biaya ini?";
+
+  if (confirm(confirmMsg)) {
     try {
+      // 1. Kurangi kembali stok sempol jika ini pengeluaran kulakan
+      if (revertStockQty > 0 && typeof DB.getSempolStock === 'function' && typeof DB.updateSempolStock === 'function') {
+        const currentStock = await DB.getSempolStock();
+        const revertedStock = Math.max(0, currentStock - revertStockQty);
+        await DB.updateSempolStock(revertedStock);
+        console.log(`[Sempol] Stock reverted from ${currentStock} to ${revertedStock} tusuk after expense delete`);
+      }
+
+      // 2. Hapus mutasi stok terkait jika ada
+      if (linkedMutation && typeof DB.deleteStockMutation === 'function') {
+        await DB.deleteStockMutation(linkedMutation.id);
+      }
+
+      // 3. Hapus catatan pengeluaran
       await DB.deleteExpense(id);
+
+      // 4. Perbarui UI Laporan & Kasir
+      await loadInitialData();
+      renderProducts();
+      updateSempolQuickBarUI();
       await loadFinancialReportData();
-      showToast("Catatan pengeluaran berhasil dihapus!", 'info');
+      if (typeof loadSempolStockReportData === 'function') {
+        await loadSempolStockReportData();
+      }
+
+      showToast(revertStockQty > 0 ? `Catatan kulakan dihapus & stok tusuk dikurangi ${revertStockQty} tusuk!` : "Catatan pengeluaran berhasil dihapus!", 'info');
     } catch (err) {
       console.error('Failed to delete expense:', err);
       alert('Gagal menghapus catatan: ' + err.message);
@@ -4639,12 +4692,58 @@ function renderSempolMutationsTable(list) {
 }
 
 async function deleteSempolMutationPrompt(id) {
-  if (!confirm('Yakin ingin menghapus catatan mutasi ini?')) return;
-  if (typeof DB.deleteStockMutation === 'function') {
-    await DB.deleteStockMutation(id);
+  if (!requireAdmin(() => deleteSempolMutationPrompt(id))) return;
+
+  const mutations = (typeof DB.getStockMutations === 'function') ? await DB.getStockMutations() : [];
+  const mutation = mutations.find(m => String(m.id) === String(id));
+  if (!mutation) return;
+
+  const isSupplierIn = mutation.type === 'supplier_in';
+  const confirmMsg = isSupplierIn
+    ? `Hapus catatan kulakan ini? Stok tusuk akan otomatis dikurangi kembali sebanyak ${mutation.tusuk} tusuk, dan catatan pengeluaran di Buku Kas juga akan dihapus.`
+    : 'Yakin ingin menghapus catatan mutasi ini?';
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    // 1. Jika ini mutasi kulakan supplier masuk, kurangi kembali stok tusuk sempol
+    if (isSupplierIn && mutation.tusuk && typeof DB.getSempolStock === 'function' && typeof DB.updateSempolStock === 'function') {
+      const currentStock = await DB.getSempolStock();
+      const revertedStock = Math.max(0, currentStock - Number(mutation.tusuk));
+      await DB.updateSempolStock(revertedStock);
+      console.log(`[Sempol] Stock reverted from ${currentStock} to ${revertedStock} tusuk after mutation delete`);
+
+      // 2. Hapus juga catatan pengeluaran terkait di Buku Kas
+      const allExpenses = (typeof DB.getExpenses === 'function') ? await DB.getExpenses() : [];
+      const matchingExpense = allExpenses.find(e =>
+        (e.linkedMutationId && String(e.linkedMutationId) === String(mutation.id)) ||
+        (e.category === 'Bahan Baku' && e.title && e.title.includes(`${mutation.tusuk} Tusuk`) && Math.abs((e.timestamp || 0) - (mutation.timestamp || 0)) < 120000)
+      );
+      if (matchingExpense && typeof DB.deleteExpense === 'function') {
+        await DB.deleteExpense(matchingExpense.id);
+        console.log(`[Sempol] Linked expense deleted from Buku Kas:`, matchingExpense.id);
+      }
+    }
+
+    // 3. Hapus catatan mutasi
+    if (typeof DB.deleteStockMutation === 'function') {
+      await DB.deleteStockMutation(id);
+    }
+
+    // 4. Perbarui UI
+    await loadInitialData();
+    renderProducts();
+    updateSempolQuickBarUI();
+    await loadSempolStockReportData();
+    if (typeof loadFinancialReportData === 'function') {
+      await loadFinancialReportData();
+    }
+
+    showToast(isSupplierIn ? `Catatan kulakan dihapus. Stok dikurangi ${mutation.tusuk} tusuk & Buku Kas disesuaikan!` : 'Catatan mutasi berhasil dihapus.', 'info');
+  } catch (err) {
+    console.error('Failed to delete mutation:', err);
+    alert('Gagal menghapus mutasi: ' + err.message);
   }
-  await loadSempolStockReportData();
-  showToast('Catatan mutasi berhasil dihapus.', 'info');
 }
 
 
