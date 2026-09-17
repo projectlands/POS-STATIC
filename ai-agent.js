@@ -1043,7 +1043,7 @@ const SalaryCalculator = {
   },
 
   onSliderChange(val) {
-    this.percentage = parseInt(val, 10) || 30;
+    this.percentage = parseInt(val, 10) || 0;
     const disp = document.getElementById('calc-display-percent');
     if (disp) disp.innerText = this.percentage + '%';
     this.calculate();
@@ -1058,64 +1058,109 @@ const SalaryCalculator = {
     this.calculate();
   },
 
+  onOwnerSliderChange(val) {
+    this.ownerPercentage = parseInt(val, 10) || 0;
+    const disp = document.getElementById('calc-display-owner-percent');
+    if (disp) disp.innerText = this.ownerPercentage + '%';
+    this.calculate();
+  },
+
   calculate() {
     const elInputProfit = document.getElementById('calc-input-net-profit');
     const elInputEmployees = document.getElementById('calc-input-employees');
+    const elInputBase = document.getElementById('calc-input-base-salary');
+    const elInputAttendance = document.getElementById('calc-input-attendance');
+
     const netProfit = Math.max(0, Number(elInputProfit?.value) || 0);
     const employees = Math.max(1, parseInt(elInputEmployees?.value, 10) || 1);
-    const percent = this.percentage || 30;
+    const baseSalary = Math.max(0, Number(elInputBase?.value) || 0);
+    const attendance = Math.max(0, Number(elInputAttendance?.value) || 0);
+    const empSharePercent = (this.percentage !== undefined) ? this.percentage : 20;
+    const ownerPercent = (this.ownerPercentage !== undefined) ? this.ownerPercentage : 60;
 
-    const totalPayroll = Math.round(netProfit * (percent / 100));
-    const perEmployee = Math.round(totalPayroll / employees);
-    const ownerProfit = netProfit - totalPayroll;
-    const ownerPercent = 100 - percent;
+    // 1. Hitung Komponen Karyawan
+    const totalEmpProfitBonus = Math.round(netProfit * (empSharePercent / 100));
+    const perEmpProfitBonus = Math.round(totalEmpProfitBonus / employees);
+    const perEmpTakeHome = baseSalary + attendance + perEmpProfitBonus;
+    const totalEmpPayroll = perEmpTakeHome * employees;
 
-    // Render results
+    // 2. Sisa Laba Bersih Toko setelah seluruh beban karyawan dipotong
+    const remainingNetProfit = Math.max(0, netProfit - totalEmpPayroll);
+
+    // 3. Distribusi Sisa Laba: Owner vs Kas Usaha
+    const ownerSalary = Math.round(remainingNetProfit * (ownerPercent / 100));
+    const businessRetained = remainingNetProfit - ownerSalary;
+    const businessPercent = 100 - ownerPercent;
+
+    // Render Preview & Badges
+    const elPreviewRemainder = document.getElementById('calc-preview-net-remainder');
+    if (elPreviewRemainder) {
+      elPreviewRemainder.innerText = `Sisa Laba: Rp ${remainingNetProfit.toLocaleString('id-ID')}`;
+    }
+
+    const elTotalPayrollBadge = document.getElementById('calc-res-total-payroll-badge');
+    if (elTotalPayrollBadge) {
+      elTotalPayrollBadge.innerText = `Total: Rp ${totalEmpPayroll.toLocaleString('id-ID')}`;
+    }
+
     const elResPerEmp = document.getElementById('calc-res-per-employee');
-    const elResTotalPayroll = document.getElementById('calc-res-total-payroll');
-    const elResPayrollShare = document.getElementById('calc-res-payroll-share');
+    if (elResPerEmp) {
+      elResPerEmp.innerHTML = `Rp ${perEmpTakeHome.toLocaleString('id-ID')} <span class="text-xs font-normal text-slate-400">/ orang</span>`;
+    }
+
+    const elResBreakdown = document.getElementById('calc-res-employee-breakdown');
+    if (elResBreakdown) {
+      elResBreakdown.innerText = `Pokok: Rp ${baseSalary.toLocaleString('id-ID')} | Kehadiran: Rp ${attendance.toLocaleString('id-ID')} | Bagi Hasil (${empSharePercent}%): Rp ${perEmpProfitBonus.toLocaleString('id-ID')}`;
+    }
+
+    // Owner Draw
     const elResOwnerProfit = document.getElementById('calc-res-owner-profit');
-    const elResOwnerPercent = document.getElementById('calc-res-owner-percent');
+    const elResOwnerDetail = document.getElementById('calc-res-owner-detail');
+    if (elResOwnerProfit) elResOwnerProfit.innerText = 'Rp ' + ownerSalary.toLocaleString('id-ID');
+    if (elResOwnerDetail) elResOwnerDetail.innerText = `${ownerPercent}% dari sisa laba (Rp ${remainingNetProfit.toLocaleString('id-ID')})`;
 
-    if (elResPerEmp) elResPerEmp.innerText = 'Rp ' + perEmployee.toLocaleString('id-ID');
-    if (elResTotalPayroll) elResTotalPayroll.innerText = 'Rp ' + totalPayroll.toLocaleString('id-ID');
-    if (elResPayrollShare) elResPayrollShare.innerText = `${percent}% dari total laba bersih`;
-    if (elResOwnerProfit) elResOwnerProfit.innerText = 'Rp ' + ownerProfit.toLocaleString('id-ID');
-    if (elResOwnerPercent) elResOwnerPercent.innerText = `${ownerPercent}% sisa untuk pemilik`;
+    // Kas Usaha
+    const elResBusinessRetained = document.getElementById('calc-res-business-retained');
+    const elResBusinessDetail = document.getElementById('calc-res-business-detail');
+    if (elResBusinessRetained) elResBusinessRetained.innerText = 'Rp ' + businessRetained.toLocaleString('id-ID');
+    if (elResBusinessDetail) elResBusinessDetail.innerText = `${businessPercent}% sisa untuk modal toko`;
 
-    // Safety gauge
+    // Indikator Keamanan Finansial Usaha
     const safetyBar = document.getElementById('calc-safety-bar');
     const safetyStatus = document.getElementById('calc-safety-status');
     const safetyNote = document.getElementById('calc-safety-note');
 
-    if (safetyBar) safetyBar.style.width = Math.min(100, (percent / 60) * 100) + '%';
+    const retainedRatio = netProfit > 0 ? (businessRetained / netProfit) : 0;
+    const retainedRatioPct = Math.round(retainedRatio * 100);
 
-    if (percent <= 25) {
+    if (safetyBar) safetyBar.style.width = Math.min(100, Math.max(5, retainedRatioPct)) + '%';
+
+    if (businessRetained >= netProfit * 0.25) {
       if (safetyBar) safetyBar.className = 'h-full bg-emerald-500 rounded-full transition-all duration-300';
       if (safetyStatus) {
-        safetyStatus.innerText = 'Sangat Sehat & Konservatif (Aman)';
+        safetyStatus.innerText = `Sangat Aman & Sehat (${retainedRatioPct}% Kas Usaha)`;
         safetyStatus.className = 'font-bold text-emerald-400';
       }
       if (safetyNote) {
-        safetyNote.innerText = `Alokasi ${percent}% sangat aman. Pemilik toko memegang ${ownerPercent}% sisa laba (Rp ${ownerProfit.toLocaleString('id-ID')}) untuk cadangan kas darurat & perputaran modal usaha.`;
+        safetyNote.innerText = `Arus kas toko sangat prima. Setelah gaji ${employees} karyawan dan gaji owner dibayarkan, usaha masih menyisakan Rp ${businessRetained.toLocaleString('id-ID')} (${retainedRatioPct}%) untuk cadangan kas dan pertumbuhan modal.`;
       }
-    } else if (percent <= 40) {
+    } else if (businessRetained >= netProfit * 0.10) {
       if (safetyBar) safetyBar.className = 'h-full bg-amber-400 rounded-full transition-all duration-300';
       if (safetyStatus) {
-        safetyStatus.innerText = 'Ideal & Seimbang (Standar UMKM/F&B)';
+        safetyStatus.innerText = `Cukup Seimbang (${retainedRatioPct}% Kas Usaha)`;
         safetyStatus.className = 'font-bold text-amber-400';
       }
       if (safetyNote) {
-        safetyNote.innerText = `Alokasi ${percent}% dari laba bersih adalah standar ideal bisnis UMKM kuliner/retail. Karyawan termotivasi dengan bagi hasil, dan arus kas pemilik toko tetap terjaga stabil.`;
+        safetyNote.innerText = `Arus kas berada pada ambang batas wajar. Kas usaha yang disisihkan sebesar Rp ${businessRetained.toLocaleString('id-ID')} (${retainedRatioPct}%). Disarankan menjaga pengeluaran operasional agar modal tidak terkuras.`;
       }
     } else {
       if (safetyBar) safetyBar.className = 'h-full bg-rose-500 rounded-full transition-all duration-300';
       if (safetyStatus) {
-        safetyStatus.innerText = 'Tinggi / Berisiko (Perlu Hati-hati)';
+        safetyStatus.innerText = `Ketat / Berisiko (${retainedRatioPct}% Kas Usaha)`;
         safetyStatus.className = 'font-bold text-rose-400';
       }
       if (safetyNote) {
-        safetyNote.innerText = `Alokasi ${percent}% melebihi batas rekomendasi 40% laba bersih. Sisa laba pemilik berkurang ke ${ownerPercent}%, berisiko menggerus modal jika terjadi hari sepi atau kenaikan biaya bahan.`;
+        safetyNote.innerText = `Peringatan: Kas usaha yang tersisa sangat minim (hanya Rp ${businessRetained.toLocaleString('id-ID')}). Beban gaji karyawan atau tarikan gaji owner terlalu besar, berisiko kesulitan modal saat hari sepi.`;
       }
     }
   },
@@ -1124,13 +1169,25 @@ const SalaryCalculator = {
   consultWithAI() {
     const elInputProfit = document.getElementById('calc-input-net-profit');
     const elInputEmployees = document.getElementById('calc-input-employees');
+    const elInputBase = document.getElementById('calc-input-base-salary');
+    const elInputAttendance = document.getElementById('calc-input-attendance');
+
     const netProfit = Number(elInputProfit?.value) || 0;
     const employees = parseInt(elInputEmployees?.value, 10) || 1;
-    const percent = this.percentage || 30;
-    const totalPayroll = Math.round(netProfit * (percent / 100));
-    const perEmployee = Math.round(totalPayroll / employees);
+    const baseSalary = Number(elInputBase?.value) || 0;
+    const attendance = Number(elInputAttendance?.value) || 0;
+    const empPercent = (this.percentage !== undefined) ? this.percentage : 20;
+    const ownerPercent = (this.ownerPercentage !== undefined) ? this.ownerPercentage : 60;
 
-    const promptText = `Saya melakukan simulasi gaji karyawan dari laba bersih toko sebesar Rp ${netProfit.toLocaleString('id-ID')} dengan alokasi ${percent}% untuk ${employees} orang karyawan (gaji per orang Rp ${perEmployee.toLocaleString('id-ID')}, total budget Rp ${totalPayroll.toLocaleString('id-ID')}). Menurut Anda sebagai konsultan bisnis, apakah skema ini sudah sehat dan bagaimana saran penerapannya?`;
+    const totalEmpProfitBonus = Math.round(netProfit * (empPercent / 100));
+    const perEmpProfitBonus = Math.round(totalEmpProfitBonus / employees);
+    const perEmpTakeHome = baseSalary + attendance + perEmpProfitBonus;
+    const totalEmpPayroll = perEmpTakeHome * employees;
+    const remainingNetProfit = Math.max(0, netProfit - totalEmpPayroll);
+    const ownerSalary = Math.round(remainingNetProfit * (ownerPercent / 100));
+    const businessRetained = remainingNetProfit - ownerSalary;
+
+    const promptText = `Saya membuat simulasi keuangan penggajian dari Laba Bersih Toko sebesar Rp ${netProfit.toLocaleString('id-ID')}:\n- Karyawan (${employees} orang): Gaji Pokok Rp ${baseSalary.toLocaleString('id-ID')} + Uang Kehadiran Rp ${attendance.toLocaleString('id-ID')} + Bonus Laba ${empPercent}% (Rp ${perEmpProfitBonus.toLocaleString('id-ID')}) = Total Take Home Rp ${perEmpTakeHome.toLocaleString('id-ID')} / orang (Total Beban: Rp ${totalEmpPayroll.toLocaleString('id-ID')})\n- Gaji / Prive Owner: ${ownerPercent}% dari sisa laba = Rp ${ownerSalary.toLocaleString('id-ID')}\n- Kas Ditahan untuk Usaha (Modal): Rp ${businessRetained.toLocaleString('id-ID')} (${100 - ownerPercent}%)\n\nSebagai konsultan bisnis, bagaimana evaluasi Anda terhadap komposisi 3 pilar keuangan toko saya ini? Apakah rasio ini sehat dan ada saran penyempurnaan?`;
 
     closeSalaryCalculatorModal();
     openAIChatModal();
@@ -1139,11 +1196,20 @@ const SalaryCalculator = {
 
   // Catat langsung ke Buku Kas
   recordToBukuKas() {
+    const elInputEmployees = document.getElementById('calc-input-employees');
+    const elInputBase = document.getElementById('calc-input-base-salary');
+    const elInputAttendance = document.getElementById('calc-input-attendance');
     const elInputProfit = document.getElementById('calc-input-net-profit');
-    const percent = this.percentage || 30;
+
     const netProfit = Number(elInputProfit?.value) || 0;
-    const totalPayroll = Math.round(netProfit * (percent / 100));
-    const employees = parseInt(document.getElementById('calc-input-employees')?.value, 10) || 1;
+    const employees = parseInt(elInputEmployees?.value, 10) || 1;
+    const baseSalary = Number(elInputBase?.value) || 0;
+    const attendance = Number(elInputAttendance?.value) || 0;
+    const empPercent = (this.percentage !== undefined) ? this.percentage : 20;
+
+    const totalEmpProfitBonus = Math.round(netProfit * (empPercent / 100));
+    const perEmpTakeHome = baseSalary + attendance + Math.round(totalEmpProfitBonus / employees);
+    const totalPayroll = perEmpTakeHome * employees;
 
     closeSalaryCalculatorModal();
 
@@ -1156,7 +1222,7 @@ const SalaryCalculator = {
 
         if (catSelect) catSelect.value = 'Gaji';
         if (amountInput) amountInput.value = totalPayroll;
-        if (notesInput) notesInput.value = `Gaji & bagi hasil laba (${percent}% dari laba Rp ${netProfit.toLocaleString('id-ID')}) untuk ${employees} karyawan`;
+        if (notesInput) notesInput.value = `Gaji ${employees} karyawan (Pokok: ${baseSalary.toLocaleString('id-ID')}, Hadir: ${attendance.toLocaleString('id-ID')}, Bonus Laba: ${totalEmpProfitBonus.toLocaleString('id-ID')})`;
       }, 150);
     } else {
       if (typeof showToast === 'function') {
