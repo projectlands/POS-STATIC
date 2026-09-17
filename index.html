@@ -645,6 +645,11 @@
                 <span>Kartu Stok Sempol</span>
                 <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-extrabold uppercase">Tusuk</span>
               </button>
+              <button type="button" onclick="openSalaryCalculatorModal()" class="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all text-emerald-400 hover:text-white hover:bg-emerald-600/30 whitespace-nowrap flex-shrink-0 border border-emerald-500/30">
+                <i class="fa-solid fa-calculator"></i>
+                <span>Simulasi Gaji</span>
+                <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-extrabold uppercase">Laba</span>
+              </button>
             </div>
           </div>
         </div>
@@ -2532,6 +2537,10 @@
           </div>
         </div>
         <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+          <!-- Tombol Kalkulator Gaji dari Laba -->
+          <button onclick="openSalaryCalculatorModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 flex items-center justify-center transition-colors" title="Kalkulator Simulasi Gaji dari Laba Bersih">
+            <i class="fa-solid fa-calculator text-xs"></i>
+          </button>
           <!-- Tombol Pengaturan API Key (Gemini) -->
           <button onclick="openAISettingsModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors" title="Pengaturan AI &amp; API Key Google Gemini">
             <i class="fa-solid fa-gear text-xs"></i>
@@ -2550,6 +2559,10 @@
       <!-- Quick Suggestion Chips -->
       <div class="px-2.5 sm:px-4 py-2 border-b border-slate-800/70 bg-dark-950/40 flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-shrink-0 touch-pan-x">
         <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex-shrink-0 mr-0.5"><i class="fa-solid fa-bolt text-amber-400 mr-1"></i>Pintas:</span>
+        <button onclick="openSalaryCalculatorModal()" class="text-[10px] sm:text-[11px] whitespace-nowrap px-2.5 py-1 rounded-full bg-emerald-950/80 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 active:scale-95 transition-all flex items-center gap-1 font-semibold">
+          <i class="fa-solid fa-calculator text-emerald-400"></i>
+          <span>Kalkulator Gaji dari Laba</span>
+        </button>
         <button onclick="sendAIChatPrompt('Berapa rekomendasi alokasi gaji karyawan berdasarkan data omzet toko saya saat ini?')" class="text-[10px] sm:text-[11px] whitespace-nowrap px-2.5 py-1 rounded-full bg-slate-800/90 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 active:scale-95 transition-all flex items-center gap-1">
           <span>💼 Simulasi Gaji Karyawan</span>
         </button>
@@ -2655,6 +2668,178 @@
             <i class="fa-solid fa-floppy-disk"></i>
             <span>Simpan Pengaturan</span>
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: KALKULATOR SIMULASI GAJI DARI LABA BERSIH -->
+  <div id="modal-salary-calculator" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94vh] animate-[fadeIn_0.2s_ease-out]">
+      <!-- Header -->
+      <div class="px-4 sm:px-6 py-3.5 border-b border-slate-800 flex justify-between items-center bg-dark-950 flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 flex-shrink-0 shadow-sm">
+            <i class="fa-solid fa-calculator text-lg"></i>
+          </div>
+          <div class="min-w-0">
+            <h3 class="font-bold text-white text-sm sm:text-base leading-tight truncate">Kalkulator Gaji dari Laba Bersih</h3>
+            <p class="text-[10px] sm:text-[11px] text-slate-400 truncate">Simulasi bagi hasil laba untuk penggajian karyawan</p>
+          </div>
+        </div>
+        <button onclick="closeSalaryCalculatorModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Scrollable Form Body -->
+      <div class="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs">
+        <!-- Pilihan Periode Sumber Laba -->
+        <div class="bg-dark-950 border border-slate-800 rounded-xl p-3 sm:p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="font-bold text-slate-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-calendar-days text-emerald-400"></i>
+              <span>Sumber Data Laba Toko</span>
+            </label>
+            <span id="calc-store-name" class="text-[10px] text-slate-400 font-mono">Toko Aktif</span>
+          </div>
+
+          <div class="grid grid-cols-4 gap-1.5 p-1 bg-dark-900 border border-slate-800/80 rounded-lg text-center font-medium">
+            <button type="button" onclick="SalaryCalculator.setPeriod('today')" id="btn-calc-period-today" class="py-1.5 rounded text-[10px] sm:text-[11px] text-slate-400 hover:text-white transition-colors">Hari Ini</button>
+            <button type="button" onclick="SalaryCalculator.setPeriod('7days')" id="btn-calc-period-7days" class="py-1.5 rounded text-[10px] sm:text-[11px] text-slate-400 hover:text-white transition-colors">7 Hari</button>
+            <button type="button" onclick="SalaryCalculator.setPeriod('30days')" id="btn-calc-period-30days" class="py-1.5 rounded text-[10px] sm:text-[11px] bg-emerald-600 text-white font-bold transition-colors">30 Hari</button>
+            <button type="button" onclick="SalaryCalculator.setPeriod('all')" id="btn-calc-period-all" class="py-1.5 rounded text-[10px] sm:text-[11px] text-slate-400 hover:text-white transition-colors">Semua</button>
+          </div>
+
+          <!-- Ringkasan Finansial Periode Ini -->
+          <div class="grid grid-cols-3 gap-2 pt-1 text-[11px]">
+            <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800/70">
+              <span class="text-[10px] text-slate-500 block">Omzet</span>
+              <span id="calc-preview-omzet" class="font-semibold text-slate-200">Rp 0</span>
+            </div>
+            <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800/70">
+              <span class="text-[10px] text-slate-500 block">HPP (Modal)</span>
+              <span id="calc-preview-hpp" class="font-semibold text-slate-200">Rp 0</span>
+            </div>
+            <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800/70">
+              <span class="text-[10px] text-slate-500 block">Beban Kas</span>
+              <span id="calc-preview-expenses" class="font-semibold text-slate-200">Rp 0</span>
+            </div>
+          </div>
+
+          <!-- Input Laba Bersih (Editable) -->
+          <div class="pt-1">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[11px] font-bold text-emerald-400">Total Laba Bersih Riil:</span>
+              <span class="text-[10px] text-slate-500 italic">*Bisa disesuaikan manual</span>
+            </div>
+            <div class="relative">
+              <span class="absolute left-3 top-2.5 text-slate-400 font-semibold text-xs">Rp</span>
+              <input type="number" id="calc-input-net-profit" value="0" oninput="SalaryCalculator.calculate()" class="w-full pl-9 pr-3.5 py-2 rounded-xl bg-dark-900 border border-slate-700/80 focus:outline-none focus:border-emerald-500 text-white font-bold text-sm">
+            </div>
+          </div>
+        </div>
+
+        <!-- Pengaturan Karyawan & Persentase Alokasi -->
+        <div class="space-y-3.5 bg-dark-950 border border-slate-800 rounded-xl p-3 sm:p-3.5">
+          <!-- Jumlah Karyawan -->
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="font-bold text-slate-200 block text-xs">Jumlah Karyawan</label>
+              <span class="text-[10px] text-slate-400">Penerima alokasi bagi hasil laba</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="SalaryCalculator.changeEmployeeCount(-1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center transition-colors">-</button>
+              <input type="number" id="calc-input-employees" value="1" min="1" max="50" oninput="SalaryCalculator.calculate()" class="w-12 text-center py-1.5 rounded-lg bg-dark-900 border border-slate-700 text-white font-bold text-sm focus:outline-none focus:border-emerald-500">
+              <button type="button" onclick="SalaryCalculator.changeEmployeeCount(1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center transition-colors">+</button>
+            </div>
+          </div>
+
+          <!-- Persentase Alokasi Slider -->
+          <div class="space-y-2 pt-2 border-t border-slate-800/80">
+            <div class="flex items-center justify-between">
+              <label class="font-bold text-slate-200 text-xs">Alokasi Laba untuk Gaji</label>
+              <span id="calc-display-percent" class="text-sm font-extrabold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/30">30%</span>
+            </div>
+            <input type="range" id="calc-slider-percent" min="5" max="60" value="30" oninput="SalaryCalculator.onSliderChange(this.value)" class="w-full accent-emerald-500 cursor-pointer">
+            
+            <!-- Quick Presets -->
+            <div class="flex items-center justify-between gap-1.5 pt-1">
+              <button type="button" onclick="SalaryCalculator.setPercentage(15)" class="px-2 py-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-[10px]">15% Hemat</button>
+              <button type="button" onclick="SalaryCalculator.setPercentage(25)" class="px-2 py-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-[10px]">25% Aman</button>
+              <button type="button" onclick="SalaryCalculator.setPercentage(30)" class="px-2 py-1 rounded bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 text-[10px] font-bold border border-emerald-500/40">30% Ideal ⭐</button>
+              <button type="button" onclick="SalaryCalculator.setPercentage(40)" class="px-2 py-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-[10px]">40% Maksimal</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- KARTU HASIL SIMULASI -->
+        <div class="bg-gradient-to-br from-dark-950 via-slate-900 to-dark-950 border border-emerald-500/40 rounded-2xl p-4 space-y-3.5 shadow-lg">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Hasil Simulasi Penggajian</span>
+            <span class="text-[10px] text-emerald-400 font-semibold"><i class="fa-solid fa-circle-check mr-1"></i>Kalkulasi Otomatis</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Gaji per Karyawan -->
+            <div class="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl space-y-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Gaji per Orang Karyawan</span>
+              <h4 id="calc-res-per-employee" class="text-lg font-black text-white">Rp 0</h4>
+              <p class="text-[9px] text-slate-400">Total alokasi dibagi rata per staf</p>
+            </div>
+
+            <!-- Total Anggaran Gaji (Payroll) -->
+            <div class="p-3 bg-slate-900/80 border border-slate-700/60 rounded-xl space-y-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Budget Gaji (Pool)</span>
+              <h4 id="calc-res-total-payroll" class="text-base font-bold text-emerald-300">Rp 0</h4>
+              <p id="calc-res-payroll-share" class="text-[9px] text-slate-400">30% dari laba bersih toko</p>
+            </div>
+          </div>
+
+          <!-- Sisa Laba Bersih untuk Pemilik Toko -->
+          <div class="p-3 bg-indigo-950/30 border border-indigo-500/30 rounded-xl flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">Sisa Laba Bersih Toko (Owner Profit)</span>
+              <span class="text-[10px] text-slate-400">Ditahan untuk modal, tabungan &amp; ekspansi usaha</span>
+            </div>
+            <div class="text-right">
+              <span id="calc-res-owner-profit" class="text-base font-bold text-white block">Rp 0</span>
+              <span id="calc-res-owner-percent" class="text-[10px] font-bold text-indigo-400">70% sisa</span>
+            </div>
+          </div>
+
+          <!-- Indikator Keamanan Arus Kas -->
+          <div class="space-y-1.5 pt-1">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="font-semibold text-slate-300">Indikator Keamanan Kas:</span>
+              <span id="calc-safety-status" class="font-bold text-emerald-400">Sangat Aman</span>
+            </div>
+            <div class="w-full h-2 bg-dark-950 rounded-full overflow-hidden border border-slate-800 flex">
+              <div id="calc-safety-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width: 30%"></div>
+            </div>
+            <p id="calc-safety-note" class="text-[10px] text-slate-400 leading-relaxed">
+              Alokasi 30% dari laba bersih adalah batas ideal standar bisnis UMKM/F&B. Pemilik toko tetap memegang 70% sisa laba untuk keamanan modal.
+            </p>
+          </div>
+        </div>
+
+        <!-- Tombol Aksi Footer -->
+        <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <!-- Batal / Tutup -->
+          <button type="button" onclick="closeSalaryCalculatorModal()" class="w-full sm:w-auto px-4 py-2 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded-xl transition-colors font-semibold">Tutup</button>
+          
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <!-- Catat ke Buku Kas -->
+            <button type="button" onclick="SalaryCalculator.recordToBukuKas()" class="flex-1 sm:flex-initial px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold border border-slate-700 flex items-center justify-center gap-1.5 transition-colors" title="Catat hasil simulasi ini ke Buku Kas Toko">
+              <i class="fa-solid fa-file-invoice-dollar text-xs text-amber-400"></i>
+              <span>Catat ke Kas</span>
+            </button>
+            <!-- Konsultasikan ke AI -->
+            <button type="button" onclick="SalaryCalculator.consultWithAI()" class="flex-1 sm:flex-initial px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-glow-primary flex items-center justify-center gap-1.5 transition-all active:scale-95" title="Minta analisis mendalam dari AI Asisten">
+              <i class="fa-solid fa-robot text-xs"></i>
+              <span>Tanya Review AI</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

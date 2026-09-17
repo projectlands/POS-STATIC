@@ -429,35 +429,38 @@ PANDUAN MENJAWAB:
     const gross30 = snapshot.totalRevenueAllTime > 0 ? (omzet30 * (snapshot.totalGrossProfitAllTime / snapshot.totalRevenueAllTime)) : (omzet30 * 0.4);
     const existingSalary = snapshot.salaryExpenses;
 
-    let response = `### 💼 Rekomendasi Penentuan Gaji Karyawan Berdasarkan Omzet\n\n`;
+    let response = `### 💼 Rekomendasi Penentuan Gaji Karyawan Berdasarkan Laba Bersih & Omzet\n\n`;
     response += `Berdasarkan data operasional toko **${snapshot.storeName}**, berikut adalah analisis finansial untuk menentukan sistem gaji yang sehat dan adil:\n\n`;
 
-    response += `📊 **Data Penjualan Toko Saat Ini:**\n`;
+    const netProfit = snapshot.netProfitRiil > 0 ? snapshot.netProfitRiil : Math.round(omzet30 * 0.35);
+    const netBudgetLow = Math.round(netProfit * 0.20);
+    const netBudgetIdeal = Math.round(netProfit * 0.30);
+    const netBudgetHigh = Math.round(netProfit * 0.40);
+
+    response += `📊 **Data Finansial Toko Saat Ini:**\n`;
     response += `- **Estimasi Omzet 30 Hari:** Rp ${omzet30.toLocaleString('id-ID')}\n`;
-    response += `- **Rata-rata Omzet Harian:** Rp ${omzetAvgDaily.toLocaleString('id-ID')}/hari\n`;
-    response += `- **Margin Laba Kotor:** ~${snapshot.grossProfitMarginPercent}%\n`;
+    response += `- **Laba Bersih Riil Toko:** **Rp ${netProfit.toLocaleString('id-ID')}** (Margin: ~${snapshot.netProfitMarginPercent}%)\n`;
     if (existingSalary > 0) {
       response += `- **Pengeluaran Gaji Terdata di Buku Kas:** Rp ${existingSalary.toLocaleString('id-ID')}\n`;
     }
     response += `\n`;
 
-    response += `🎯 **Batas Anggaran Beban Gaji (Payroll Budget Rule):**\n`;
-    response += `Dalam manajemen bisnis UMKM (F&B / Retail), alokasi total biaya gaji karyawan yang aman agar usaha tidak tekor adalah **15% s/d 25% dari total omzet**:\n`;
-    response += `- **Batas Aman/Konservatif (15%):** Rp ${budgetLow.toLocaleString('id-ID')}/bulan\n`;
-    response += `- **Batas Ideal/Moderat (20%):** Rp ${budgetMed.toLocaleString('id-ID')}/bulan\n`;
-    response += `- **Batas Maksimal (25%):** Rp ${budgetHigh.toLocaleString('id-ID')}/bulan *(Hati-hati jika melebihi angka ini karena dapat menggerus modal usaha)*\n\n`;
+    response += `🎯 **Aturan Alokasi Gaji dari Laba Bersih (Profit-Sharing Rule):**\n`;
+    response += `Jika gaji diambil dari **Laba Bersih**, rasio alokasi yang ideal dan sehat agar pemilik toko tetap memegang cadangan modal yang kuat adalah **20% s/d 40% dari laba bersih**:\n`;
+    response += `- **Batas Hemat & Aman (20% Laba):** Total Rp ${netBudgetLow.toLocaleString('id-ID')}/bulan (Sisa 80% untuk modal pemilik)\n`;
+    response += `- **Batas Ideal Standar Bisnis (30% Laba):** Total Rp ${netBudgetIdeal.toLocaleString('id-ID')}/bulan (Sisa 70% untuk pemilik) ⭐\n`;
+    response += `- **Batas Maksimal (40% Laba):** Total Rp ${netBudgetHigh.toLocaleString('id-ID')}/bulan (Sisa 60% untuk pemilik)\n\n`;
 
     response += `💡 **Rekomendasi 2 Skema Sistem Gaji Terbaik:**\n\n`;
-    response += `**1. Skema Gaji Pokok + Bonus Target Harian (Paling Direkomendasikan):**\n`;
-    response += `- **Gaji Pokok:** Berikan 65% - 75% dari total budget (misal Rp ${Math.round(budgetMed * 0.7).toLocaleString('id-ID')}).\n`;
-    response += `- **Bonus Omzet Harian:** Jika penjualan hari itu mencapai target minimal (misal > Rp ${(omzetAvgDaily * 1.2).toLocaleString('id-ID')}), berikan insentif harian tambahan (contoh: Rp 10.000 - Rp 25.000/hari atau Rp 500/porsi terjual).\n`;
-    response += `*Keuntungan:* Karyawan termotivasi aktif melayani pelanggan dan meningkatkan omzet karena semakin ramai toko, semakin besar komisi mereka.\n\n`;
+    response += `**1. Skema Gaji Pokok + Bonus Bagi Hasil Laba (Paling Direkomendasikan):**\n`;
+    response += `- Berikan gaji pokok dasar yang terjangkau + bonus insentif bulanan diambil dari 20%-30% laba bersih toko jika target operasional tercapai.\n`;
+    response += `*Keuntungan:* Karyawan merasa memiliki usaha (*sense of belonging*) dan termotivasi menjaga efisiensi biaya serta menaikkan penjualan.\n\n`;
 
-    response += `**2. Skema Bagi Hasil Komisi Per Struk/Porsi:**\n`;
-    response += `- Gaji harian dasar terjangkau + komisi Rp 500 - Rp 1.000 per cup/porsi/struk yang berhasil dijual.\n`;
-    response += `- Memberikan perlindungan arus kas bagi pemilik toko saat hari sepi, sekaligus memacu kerja keras saat toko ramai.\n\n`;
+    response += `**2. Skema Bagi Rata Laba Bersih (Flat Profit Sharing):**\n`;
+    response += `- Total alokasi (misal 30% = Rp ${netBudgetIdeal.toLocaleString('id-ID')}) dibagi rata dengan jumlah karyawan aktif.\n\n`;
 
-    response += `⚠️ **Tips Penting:** Pastikan Anda tetap mencatat pengeluaran gaji karyawan ke menu **Laporan > Buku Kas & Laba Rugi** agar kalkulasi laba bersih riil selalu akurat.`;
+    response += `🧮 **Ingin Coba Simulasi Interaktif?**\n`;
+    response += `Gunakan fitur baru **Kalkulator Simulasi Gaji dari Laba Bersih** dengan mengklik tombol kalkulator di bagian atas jendela chat ini atau di sub-tab menu Laporan Toko!`;
 
     return response;
   },
@@ -915,4 +918,266 @@ if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
     AIAgent.init();
   });
+}
+
+/**
+ * KALKULATOR SIMULASI GAJI DARI LABA BERSIH
+ * Menghitung pembagian laba bersih toko untuk alokasi gaji karyawan & pemilik toko
+ */
+const SalaryCalculator = {
+  currentPeriod: '30days',
+  netProfit: 0,
+  omzet: 0,
+  hpp: 0,
+  expenses: 0,
+  employeeCount: 1,
+  percentage: 30,
+
+  async init() {
+    await this.loadDataForPeriod(this.currentPeriod);
+  },
+
+  async setPeriod(period) {
+    this.currentPeriod = period;
+    ['today', '7days', '30days', 'all'].forEach(p => {
+      const btn = document.getElementById(`btn-calc-period-${p}`);
+      if (btn) {
+        if (p === period) {
+          btn.className = 'py-1.5 rounded text-[10px] sm:text-[11px] bg-emerald-600 text-white font-bold transition-colors';
+        } else {
+          btn.className = 'py-1.5 rounded text-[10px] sm:text-[11px] text-slate-400 hover:text-white transition-colors';
+        }
+      }
+    });
+    await this.loadDataForPeriod(period);
+  },
+
+  async loadDataForPeriod(period) {
+    const store = (typeof DB !== 'undefined' && DB.getActiveStore) ? DB.getActiveStore() : { name: 'Toko Aktif' };
+    const storeNameEl = document.getElementById('calc-store-name');
+    if (storeNameEl) storeNameEl.innerText = store.name;
+
+    const txs = (typeof DB !== 'undefined' && DB.getTransactions) ? await DB.getTransactions() : [];
+    const exps = (typeof DB !== 'undefined' && DB.getExpenses) ? await DB.getExpenses() : [];
+
+    const now = new Date();
+    const oneDay = 24 * 60 * 60 * 1000;
+    let startDate = new Date(0); // all
+    const todayStr = now.toISOString().split('T')[0];
+
+    if (period === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === '7days') {
+      startDate = new Date(now.getTime() - (7 * oneDay));
+    } else if (period === '30days') {
+      startDate = new Date(now.getTime() - (30 * oneDay));
+    }
+
+    let omzet = 0;
+    let hpp = 0;
+
+    txs.forEach(tx => {
+      const txTime = new Date(tx.timestamp || tx.date || now);
+      if (period === 'today') {
+        const isToday = (tx.timestamp && String(tx.timestamp).startsWith(todayStr)) || (tx.date && String(tx.date).startsWith(todayStr));
+        if (!isToday) return;
+      } else if (txTime < startDate) {
+        return;
+      }
+
+      const total = Number(tx.total) || 0;
+      omzet += total;
+
+      if (Array.isArray(tx.items)) {
+        tx.items.forEach(item => {
+          const qty = Number(item.qty || item.quantity || 1);
+          const cost = Number(item.cost || item.costPrice || 0);
+          hpp += (cost * qty);
+        });
+      }
+    });
+
+    let expenses = 0;
+    exps.forEach(exp => {
+      const expTime = new Date(exp.date || now);
+      if (period === 'today') {
+        const isToday = (exp.date && String(exp.date).startsWith(todayStr));
+        if (!isToday) return;
+      } else if (expTime < startDate) {
+        return;
+      }
+      expenses += (Number(exp.amount) || 0);
+    });
+
+    const grossProfit = omzet - hpp;
+    const netProfit = grossProfit - expenses;
+
+    this.omzet = omzet;
+    this.hpp = hpp;
+    this.expenses = expenses;
+    this.netProfit = netProfit > 0 ? netProfit : (omzet > 0 ? Math.round(omzet * 0.35) : 3500000);
+
+    // Update previews
+    const elOmzet = document.getElementById('calc-preview-omzet');
+    const elHpp = document.getElementById('calc-preview-hpp');
+    const elExpenses = document.getElementById('calc-preview-expenses');
+    const elInputProfit = document.getElementById('calc-input-net-profit');
+
+    if (elOmzet) elOmzet.innerText = 'Rp ' + omzet.toLocaleString('id-ID');
+    if (elHpp) elHpp.innerText = 'Rp ' + hpp.toLocaleString('id-ID');
+    if (elExpenses) elExpenses.innerText = 'Rp ' + expenses.toLocaleString('id-ID');
+    if (elInputProfit) elInputProfit.value = this.netProfit;
+
+    this.calculate();
+  },
+
+  changeEmployeeCount(delta) {
+    const el = document.getElementById('calc-input-employees');
+    if (!el) return;
+    let val = (parseInt(el.value, 10) || 1) + delta;
+    if (val < 1) val = 1;
+    if (val > 100) val = 100;
+    el.value = val;
+    this.employeeCount = val;
+    this.calculate();
+  },
+
+  onSliderChange(val) {
+    this.percentage = parseInt(val, 10) || 30;
+    const disp = document.getElementById('calc-display-percent');
+    if (disp) disp.innerText = this.percentage + '%';
+    this.calculate();
+  },
+
+  setPercentage(pct) {
+    this.percentage = pct;
+    const slider = document.getElementById('calc-slider-percent');
+    const disp = document.getElementById('calc-display-percent');
+    if (slider) slider.value = pct;
+    if (disp) disp.innerText = pct + '%';
+    this.calculate();
+  },
+
+  calculate() {
+    const elInputProfit = document.getElementById('calc-input-net-profit');
+    const elInputEmployees = document.getElementById('calc-input-employees');
+    const netProfit = Math.max(0, Number(elInputProfit?.value) || 0);
+    const employees = Math.max(1, parseInt(elInputEmployees?.value, 10) || 1);
+    const percent = this.percentage || 30;
+
+    const totalPayroll = Math.round(netProfit * (percent / 100));
+    const perEmployee = Math.round(totalPayroll / employees);
+    const ownerProfit = netProfit - totalPayroll;
+    const ownerPercent = 100 - percent;
+
+    // Render results
+    const elResPerEmp = document.getElementById('calc-res-per-employee');
+    const elResTotalPayroll = document.getElementById('calc-res-total-payroll');
+    const elResPayrollShare = document.getElementById('calc-res-payroll-share');
+    const elResOwnerProfit = document.getElementById('calc-res-owner-profit');
+    const elResOwnerPercent = document.getElementById('calc-res-owner-percent');
+
+    if (elResPerEmp) elResPerEmp.innerText = 'Rp ' + perEmployee.toLocaleString('id-ID');
+    if (elResTotalPayroll) elResTotalPayroll.innerText = 'Rp ' + totalPayroll.toLocaleString('id-ID');
+    if (elResPayrollShare) elResPayrollShare.innerText = `${percent}% dari total laba bersih`;
+    if (elResOwnerProfit) elResOwnerProfit.innerText = 'Rp ' + ownerProfit.toLocaleString('id-ID');
+    if (elResOwnerPercent) elResOwnerPercent.innerText = `${ownerPercent}% sisa untuk pemilik`;
+
+    // Safety gauge
+    const safetyBar = document.getElementById('calc-safety-bar');
+    const safetyStatus = document.getElementById('calc-safety-status');
+    const safetyNote = document.getElementById('calc-safety-note');
+
+    if (safetyBar) safetyBar.style.width = Math.min(100, (percent / 60) * 100) + '%';
+
+    if (percent <= 25) {
+      if (safetyBar) safetyBar.className = 'h-full bg-emerald-500 rounded-full transition-all duration-300';
+      if (safetyStatus) {
+        safetyStatus.innerText = 'Sangat Sehat & Konservatif (Aman)';
+        safetyStatus.className = 'font-bold text-emerald-400';
+      }
+      if (safetyNote) {
+        safetyNote.innerText = `Alokasi ${percent}% sangat aman. Pemilik toko memegang ${ownerPercent}% sisa laba (Rp ${ownerProfit.toLocaleString('id-ID')}) untuk cadangan kas darurat & perputaran modal usaha.`;
+      }
+    } else if (percent <= 40) {
+      if (safetyBar) safetyBar.className = 'h-full bg-amber-400 rounded-full transition-all duration-300';
+      if (safetyStatus) {
+        safetyStatus.innerText = 'Ideal & Seimbang (Standar UMKM/F&B)';
+        safetyStatus.className = 'font-bold text-amber-400';
+      }
+      if (safetyNote) {
+        safetyNote.innerText = `Alokasi ${percent}% dari laba bersih adalah standar ideal bisnis UMKM kuliner/retail. Karyawan termotivasi dengan bagi hasil, dan arus kas pemilik toko tetap terjaga stabil.`;
+      }
+    } else {
+      if (safetyBar) safetyBar.className = 'h-full bg-rose-500 rounded-full transition-all duration-300';
+      if (safetyStatus) {
+        safetyStatus.innerText = 'Tinggi / Berisiko (Perlu Hati-hati)';
+        safetyStatus.className = 'font-bold text-rose-400';
+      }
+      if (safetyNote) {
+        safetyNote.innerText = `Alokasi ${percent}% melebihi batas rekomendasi 40% laba bersih. Sisa laba pemilik berkurang ke ${ownerPercent}%, berisiko menggerus modal jika terjadi hari sepi atau kenaikan biaya bahan.`;
+      }
+    }
+  },
+
+  // Kirim hasil simulasi ke AI Chat untuk dikonsultasikan
+  consultWithAI() {
+    const elInputProfit = document.getElementById('calc-input-net-profit');
+    const elInputEmployees = document.getElementById('calc-input-employees');
+    const netProfit = Number(elInputProfit?.value) || 0;
+    const employees = parseInt(elInputEmployees?.value, 10) || 1;
+    const percent = this.percentage || 30;
+    const totalPayroll = Math.round(netProfit * (percent / 100));
+    const perEmployee = Math.round(totalPayroll / employees);
+
+    const promptText = `Saya melakukan simulasi gaji karyawan dari laba bersih toko sebesar Rp ${netProfit.toLocaleString('id-ID')} dengan alokasi ${percent}% untuk ${employees} orang karyawan (gaji per orang Rp ${perEmployee.toLocaleString('id-ID')}, total budget Rp ${totalPayroll.toLocaleString('id-ID')}). Menurut Anda sebagai konsultan bisnis, apakah skema ini sudah sehat dan bagaimana saran penerapannya?`;
+
+    closeSalaryCalculatorModal();
+    openAIChatModal();
+    sendAIChatPrompt(promptText);
+  },
+
+  // Catat langsung ke Buku Kas
+  recordToBukuKas() {
+    const elInputProfit = document.getElementById('calc-input-net-profit');
+    const percent = this.percentage || 30;
+    const netProfit = Number(elInputProfit?.value) || 0;
+    const totalPayroll = Math.round(netProfit * (percent / 100));
+    const employees = parseInt(document.getElementById('calc-input-employees')?.value, 10) || 1;
+
+    closeSalaryCalculatorModal();
+
+    if (typeof openExpenseModal === 'function') {
+      openExpenseModal();
+      setTimeout(() => {
+        const catSelect = document.getElementById('expense-category');
+        const amountInput = document.getElementById('expense-amount');
+        const notesInput = document.getElementById('expense-notes');
+
+        if (catSelect) catSelect.value = 'Gaji';
+        if (amountInput) amountInput.value = totalPayroll;
+        if (notesInput) notesInput.value = `Gaji & bagi hasil laba (${percent}% dari laba Rp ${netProfit.toLocaleString('id-ID')}) untuk ${employees} karyawan`;
+      }, 150);
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Silakan buka menu Laporan > Buku Kas untuk mencatat pengeluaran gaji ini.', 'info');
+      }
+    }
+  }
+};
+
+function openSalaryCalculatorModal() {
+  const modal = document.getElementById('modal-salary-calculator');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  SalaryCalculator.init();
+}
+
+function closeSalaryCalculatorModal() {
+  const modal = document.getElementById('modal-salary-calculator');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
 }
